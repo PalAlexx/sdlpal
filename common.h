@@ -31,6 +31,62 @@
 #define _CRT_SECURE_NO_WARNINGS
 #endif
 
+#define SHOW_MP_DECREASING							//当mp减少时也显示数值
+#define STRENGTHEN_ENEMY   //增强敌人，在后期加强前期的敌人，队伍人数在4人，敌人增强
+#define SHOW_DATA_IN_BATTLE  //战斗中显示数据
+#define SHOW_ENEMY_STATUS   //战斗中显示敌人状态
+#define ADD_POISON_FAIL_THEN_JUMP                    
+#define ADD_SOME_POISONS_SUCCESSFULLY_ANYTIME		
+#define ADD_SOME_STATUSES_SUCCESSFULLY_ANYTIME		
+#define GAIN_MORE_HIDDEN_EXP						
+#define POISON_STATUS_EXPAND  
+//
+//实际的武术灵力防御
+//敌人可偷窃我方道具
+//一次性偷窃所有敌人携带的道具
+//增加新指令 百分比恢复体力、真气
+//敌人可以被咒封
+//显示人物升级学会法术
+//快速存档
+typedef enum tagPlayerRoleID
+{
+	RoleID_LiXiaoYao = 0,
+	RoleID_ZhaoLingEr = 1,
+	RoleID_LinYueRu = 2,
+	RoleID_WuHou = 3,
+	RoleID_ANu = 4,
+	RoleID_GaiLuoJiao = 5,
+} PlayerRoleID;
+
+typedef enum tagPlayerPara
+{
+	Para_Level = 0x0006,
+	Para_MaxHP,
+	Para_MaxMP,
+	Para_HP,
+	Para_MP,
+	Para_AttackStrength = 0x0011,
+	Para_MagicStrength,
+	Para_Defense,
+	Para_Dexterity,
+	Para_FleeRate,
+	Para_PoisonResistance = 0x0016,
+	Para_CloudResistance = 0x0017,
+	Para_ThunderResistance,
+	Para_WaterResistance,
+	Para_FireResistance,
+	Para_EarthResistance,
+	Para_SorceryResistance = 0x001c,
+	Para_Wisdom = 0x0042,
+	Para_Power,
+} PlayerPara;
+   
+
+
+#if defined(_MSC_VER) && !defined(_CRT_SECURE_NO_WARNINGS)
+#define _CRT_SECURE_NO_WARNINGS
+#endif
+
 #include <wchar.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -261,7 +317,7 @@ typedef enum tagLOGLEVEL
 # define PAL_HAS_CONFIG_PAGE   FALSE
 #endif
 
-#define PAL_MAX_GLOBAL_BUFFERS 4
+#define PAL_MAX_GLOBAL_BUFFERS 5
 #define PAL_GLOBAL_BUFFER_SIZE 1024
 
 //

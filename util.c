@@ -726,14 +726,14 @@ UTIL_CheckResourceFiles(
 	const char *common_files[] = {
 		"abc.mkf", "ball.mkf", "data.mkf", "f.mkf",
 		"fbp.mkf", "fire.mkf", "gop.mkf",  "map.mkf",
-		"mgo.mkf", "pat.mkf",  "rgm.mkf",  "rng.mkf",
+		"mgo.mkf", "palette.mkf",  "rgm.mkf",  "rng.mkf",
 		"sss.mkf"
 	};
 	const char *msg_files[][2] = {
 		{ msgfile, "m.msg"    },
 		{ msgfile, "word.dat" }
 	};
-	const char *sound_files[2] = { "voc.mkf", "sounds.mkf" };
+	const char *sound_files[2] = { "voc.mkf", "newdata.mkf" };
 	const char *music_files[2] = { "midi.mkf", "mus.mkf" };
 	int msgidx = !(msgfile && *msgfile);
 	PALFILE retval = (PALFILE)0;

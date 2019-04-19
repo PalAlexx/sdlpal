@@ -345,6 +345,9 @@
     <ClCompile Include="..\glslp.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\enemy.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\ascii.h">
@@ -736,6 +739,9 @@
     </ClInclude>
     <ClInclude Include="..\glslp.h">
       <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\enemy.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

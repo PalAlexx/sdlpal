@@ -246,7 +246,7 @@ PAL_CreateSingleLineBox(
    BOOL           fSaveScreen
 )
 {
-    return PAL_CreateSingleLineBoxWithShadow(pos, nLen, fSaveScreen, 6);
+    return PAL_CreateSingleLineBoxWithShadow(pos, nLen, fSaveScreen, 0);
 }
 
 LPBOX
@@ -602,7 +602,7 @@ PAL_ReadMenu(
       //
       // Use delay function to avoid high CPU usage.
       //
-      SDL_Delay(50);
+      SDL_Delay(1);
    }
 
    return MENUITEM_VALUE_CANCELLED;

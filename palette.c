@@ -49,10 +49,10 @@ PAL_GetPalette(
    INT                   i;
    FILE                 *fp;
 
-   fp = UTIL_OpenRequiredFile("pat.mkf");
+   fp = UTIL_OpenRequiredFile("palette.mkf");
 
    //
-   // Read the palette data from the pat.mkf file
+   // Read the palette data from the palette.mkf file
    //
    i = PAL_MKFReadChunk(buf, 1536, iPaletteNum, fp);
 

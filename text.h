@@ -109,7 +109,7 @@ PAL_GetMsgNum(
 
 LPWSTR
 PAL_UnescapeText(
-   LPCWSTR    lpszText
+	LPCWSTR    lpszText
 );
 
 VOID
@@ -124,13 +124,13 @@ PAL_DrawText(
 
 VOID
 PAL_DrawTextUnescape(
-   LPCWSTR    lpszText,
-   PAL_POS    pos,
-   BYTE       bColor,
-   BOOL       fShadow,
-   BOOL       fUpdate,
-   BOOL       fUse8x8Font,
-   BOOL       fUnescape
+	LPCWSTR    lpszText,
+	PAL_POS    pos,
+	BYTE       bColor,
+	BOOL       fShadow,
+	BOOL       fUpdate,
+	BOOL       fUse8x8Font,
+	BOOL       fUnescape
 );
 
 VOID

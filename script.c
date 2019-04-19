@@ -28,6 +28,91 @@
 BOOL            g_fScriptSuccess = TRUE;
 static int      g_iCurEquipPart = -1;
 
+static void __pal_team_up(WORD* members) {
+    //
+    // Set the player party
+    //
+    gpGlobals->wMaxPartyMemberIndex = 0;
+
+    for (int i = 0; i < MAX_PLAYERS_IN_PARTY; i++)
+    {
+        if (members[i] != 0)
+        {
+            gpGlobals->rgParty[gpGlobals->wMaxPartyMemberIndex].wPlayerRole = (WORD) (members[i] - 1);
+            gpGlobals->wMaxPartyMemberIndex++;
+        }
+    }
+
+    if (gpGlobals->wMaxPartyMemberIndex == 0)
+    {
+        // HACK for Dream 2.11
+        gpGlobals->rgParty[0].wPlayerRole = 0;
+        gpGlobals->wMaxPartyMemberIndex = 1;
+    }
+
+    gpGlobals->wMaxPartyMemberIndex--;
+
+    //
+    // Reload the player sprites
+    //
+    PAL_SetLoadFlags(kLoadPlayerSprite);
+    PAL_LoadResources();
+
+    memset(gpGlobals->rgPoisonStatus, 0, sizeof(gpGlobals->rgPoisonStatus));
+    PAL_UpdateEquipments();
+}
+
+
+static WORD
+PAL_NEW_CheckAndGetLegalEnemyTarget(
+	WORD wEnemyIndex
+)
+/*++
+Check if the object is a legitimate enemy target
+--*/
+{
+	WORD		i;
+	if (wEnemyIndex >= MAX_ENEMIES_IN_TEAM || g_Battle.rgEnemy[wEnemyIndex].wObjectID == 0)
+	{
+		do
+		{
+			i = (WORD)RandomLong(0, g_Battle.wMaxEnemyIndex);
+		} while (g_Battle.rgEnemy[i].wObjectID == 0);
+
+		return i;
+	}
+	else
+	{
+		return wEnemyIndex;
+	}
+}
+
+static WORD
+PAL_NEW_CheckAndGetLegalPlayerTarget(
+	WORD wPlayerRole
+)
+/*++
+Check if the object is a legitimate target of our role
+--*/
+{
+	INT		i;
+	for (i = 0; i <= gpGlobals->wMaxPartyMemberIndex; i++)
+	{
+		if (wPlayerRole == gpGlobals->rgParty[i].wPlayerRole)
+		{
+			return wPlayerRole;
+		}
+	}
+
+	if (i > gpGlobals->wMaxPartyMemberIndex)
+	{
+		i = RandomLong(0, gpGlobals->wMaxPartyMemberIndex);
+		wPlayerRole = gpGlobals->rgParty[i].wPlayerRole;
+	}
+	return wPlayerRole;
+}
+
+
 static BOOL
 PAL_NPCWalkTo(
    WORD           wEventObjectID,
@@ -597,6 +682,8 @@ PAL_InterpretInstruction(
    LPSCRIPTENTRY          pScript;
    int                    iPlayerRole, i, j, x, y;
    WORD                   w, wCurEventObjectID;
+    WORD                wPlayerRole;
+    WCHAR s[256] = L"";
 
    pScript = &(gpGlobals->g.lprgScriptEntry[wScriptEntry]);
 
@@ -644,9 +731,15 @@ PAL_InterpretInstruction(
       //
       // walk one step
       //
+   {
+      if (pEvtObj == NULL)
+      {
+         break;
+      }
       pEvtObj->wDirection = pScript->wOperation - 0x000B;
       PAL_NPCWalkOneStep(wEventObjectID, 2);
       break;
+   }
 
    case 0x000F:
       //
@@ -680,7 +773,7 @@ PAL_InterpretInstruction(
       if ((wEventObjectID & 1) ^ (gpGlobals->dwFrameNum & 1))
       {
          if (!PAL_NPCWalkTo(wEventObjectID, pScript->rgwOperand[0], pScript->rgwOperand[1],
-            pScript->rgwOperand[2], 2))
+            pScript->rgwOperand[2], 4))
          {
             wScriptEntry--;
          }
@@ -742,14 +835,14 @@ PAL_InterpretInstruction(
       // set the player's extra attribute
       //
       {
-         WORD *p;
+         INT *p;
 
          i = pScript->rgwOperand[0] - 0xB;
 
-         p = (WORD *)(&gpGlobals->rgEquipmentEffect[i]); // HACKHACK
+         p = (INT *)(&gpGlobals->rgEquipmentEffect[i]); // HACKHACK
 
          p[pScript->rgwOperand[1] * MAX_PLAYER_ROLES + wEventObjectID] =
-            (SHORT)pScript->rgwOperand[2];
+            (SHORT)pScript->rgwOperand[2] ;
       }
       break;
 
@@ -786,7 +879,7 @@ PAL_InterpretInstruction(
       // Increase/decrease the player's attribute
       //
       {
-         WORD *p = (WORD *)(&gpGlobals->g.PlayerRoles); // HACKHACK
+         INT *p = (INT *)(&gpGlobals->g.PlayerRoles); // HACKHACK
 
          if (pScript->rgwOperand[2] == 0)
          {
@@ -802,19 +895,20 @@ PAL_InterpretInstruction(
       }
       break;
 
+
    case 0x001A:
       //
       // Set player's stat
       //
       {
-         WORD *p = (WORD *)(&gpGlobals->g.PlayerRoles); // HACKHACK
+         INT *p = (INT *)(&gpGlobals->g.PlayerRoles); // HACKHACK
 
          if (g_iCurEquipPart != -1)
          {
             //
             // In the progress of equipping items
             //
-            p = (WORD *)&(gpGlobals->rgEquipmentEffect[g_iCurEquipPart]);
+            p = (INT *)&(gpGlobals->rgEquipmentEffect[g_iCurEquipPart]);
          }
 
          if (pScript->rgwOperand[2] == 0)
@@ -835,6 +929,7 @@ PAL_InterpretInstruction(
       }
       break;
 
+   
    case 0x001B:
       //
       // Increase/decrease player's HP
@@ -904,7 +999,7 @@ PAL_InterpretInstruction(
          {
             w = gpGlobals->rgParty[i].wPlayerRole;
             PAL_IncreaseHPMP(w,
-               (SHORT)(pScript->rgwOperand[1]), (SHORT)(pScript->rgwOperand[1]));
+               (SHORT)(pScript->rgwOperand[1]), (SHORT)(pScript->rgwOperand[2]));
          }
       }
       else
@@ -913,7 +1008,7 @@ PAL_InterpretInstruction(
          // Apply to one player. The wEventObjectID parameter should indicate the player role.
          //
          if (!PAL_IncreaseHPMP(wEventObjectID,
-            (SHORT)(pScript->rgwOperand[1]), (SHORT)(pScript->rgwOperand[1])))
+            (SHORT)(pScript->rgwOperand[1]), (SHORT)(pScript->rgwOperand[2])))
          {
             g_fScriptSuccess = FALSE;
          }
@@ -1029,12 +1124,12 @@ PAL_InterpretInstruction(
             if (gpGlobals->g.PlayerRoles.rgwHP[w] == 0)
             {
                gpGlobals->g.PlayerRoles.rgwHP[w] =
-                  gpGlobals->g.PlayerRoles.rgwMaxHP[w] * pScript->rgwOperand[1] / 10;
+	               PAL_GetPlayerMaxHP(w)* pScript->rgwOperand[1] / 10;
 
-               PAL_CurePoisonByLevel(w, 3);
+               PAL_CurePoisonByLevel(w, 10);
                for (x = 0; x < kStatusAll; x++)
                {
-                  PAL_RemovePlayerStatus(w, x);
+	               PAL_RemovePlayerStatus(w, x);
                }
 
                g_fScriptSuccess = TRUE;
@@ -1049,9 +1144,9 @@ PAL_InterpretInstruction(
          if (gpGlobals->g.PlayerRoles.rgwHP[wEventObjectID] == 0)
          {
             gpGlobals->g.PlayerRoles.rgwHP[wEventObjectID] =
-               gpGlobals->g.PlayerRoles.rgwMaxHP[wEventObjectID] * pScript->rgwOperand[1] / 10;
+               PAL_GetPlayerMaxHP(wEventObjectID)* pScript->rgwOperand[1] / 10;
 
-            PAL_CurePoisonByLevel(wEventObjectID, 3);
+            PAL_CurePoisonByLevel(wEventObjectID, 10);
             for (x = 0; x < kStatusAll; x++)
             {
                PAL_RemovePlayerStatus(wEventObjectID, x);
@@ -1135,160 +1230,205 @@ PAL_InterpretInstruction(
       break;
 
    case 0x0028:
-      //
-      // Apply poison to enemy
-      //
-      if (pScript->rgwOperand[0])
+      /*
+      28 参数1 参数2      敌方中毒指令
+      参数1 是否全体
+      参数2 中毒代号
+      作用      敌方选定对象或全体中参数2代表的毒
+      */
+   {
+      BOOL fAll = (pScript->rgwOperand[0] == 0) ? FALSE : TRUE;
+      WORD wPoisonID = pScript->rgwOperand[1];
+      BOOL fJump = FALSE;
+      BOOL fAlwaysSuccess = FALSE;
+      WORD wPoisonResistance = 0;
+      INT iSuccessRate = 0;
+      WORD wBaseSuccessRate = 100;
+
+      if (g_Battle.fPlayerMoving)
       {
-         //
-         // Apply to everyone
-         //
+         wPlayerRole = gpGlobals->rgParty[g_Battle.wMovingPlayerIndex].wPlayerRole;
+         wPlayerRole = PAL_NEW_CheckAndGetLegalPlayerTarget(wPlayerRole);
+      }
+
+#ifdef ADD_SOME_POISONS_SUCCESSFULLY_ANYTIME
+      if (gpGlobals->g.rgObject[pScript->rgwOperand[1]].poison.wPoisonLevel >= 99)
+      {
+         fAlwaysSuccess = TRUE;
+      }
+#endif
+
+      if (fAll)
+      {	// 全体
          for (i = 0; i <= g_Battle.wMaxEnemyIndex; i++)
          {
             w = g_Battle.rgEnemy[i].wObjectID;
-
-            if (w == 0)
+            if (w != 0)
             {
-               continue;
-            }
-
-            if (RandomLong(0, 9) >=
-               gpGlobals->g.rgObject[w].enemy.wResistanceToSorcery)
-            {
-               for (j = 0; j < MAX_POISONS; j++)
+               wPoisonResistance = PAL_New_GetEnemyPoisonResistance(i);
+               iSuccessRate = wBaseSuccessRate - wPoisonResistance;
+               if (fAlwaysSuccess || PAL_New_GetTrueByPercentage(iSuccessRate))
                {
-                  if (g_Battle.rgEnemy[i].rgPoisons[j].wPoisonID ==
-                     pScript->rgwOperand[1])
-                  {
-                     break;
-                  }
+	               PAL_New_AddPoisonForEnemy(i, wPoisonID);
                }
-
-               if (j >= MAX_POISONS)
+#ifdef ADD_POISON_FAIL_THEN_JUMP
+               else if (pScript->rgwOperand[2] != 0x0000 && pScript->rgwOperand[2] != 0xffff)
                {
-                  for (j = 0; j < MAX_POISONS; j++)
-                  {
-                     if (g_Battle.rgEnemy[i].rgPoisons[j].wPoisonID == 0)
-                     {
-                        g_Battle.rgEnemy[i].rgPoisons[j].wPoisonID = pScript->rgwOperand[1];
-                        g_Battle.rgEnemy[i].rgPoisons[j].wPoisonScript =
-                           PAL_RunTriggerScript(gpGlobals->g.rgObject[pScript->rgwOperand[1]].poison.wEnemyScript, wEventObjectID);
-                        break;
-                     }
-                  }
+	               fJump = TRUE;
                }
+#endif
             }
          }
       }
       else
-      {
-         //
-         // Apply to one enemy
-         //
-         w = g_Battle.rgEnemy[wEventObjectID].wObjectID;
+      {	//单体
+         wEventObjectID = PAL_NEW_CheckAndGetLegalEnemyTarget(wEventObjectID);
+         wPoisonResistance = PAL_New_GetEnemyPoisonResistance(wEventObjectID);
+         iSuccessRate = wBaseSuccessRate - wPoisonResistance;
 
-         if (RandomLong(0, 9) >=
-            gpGlobals->g.rgObject[w].enemy.wResistanceToSorcery)
+         if (fAlwaysSuccess || PAL_New_GetTrueByPercentage(iSuccessRate))
          {
-            for (j = 0; j < MAX_POISONS; j++)
-            {
-               if (g_Battle.rgEnemy[wEventObjectID].rgPoisons[j].wPoisonID ==
-                  pScript->rgwOperand[1])
-               {
-                  break;
-               }
-            }
-
-            if (j >= MAX_POISONS)
-            {
-               for (j = 0; j < MAX_POISONS; j++)
-               {
-                  if (g_Battle.rgEnemy[wEventObjectID].rgPoisons[j].wPoisonID == 0)
-                  {
-                     g_Battle.rgEnemy[wEventObjectID].rgPoisons[j].wPoisonID = pScript->rgwOperand[1];
-                     g_Battle.rgEnemy[wEventObjectID].rgPoisons[j].wPoisonScript =
-                        PAL_RunTriggerScript(gpGlobals->g.rgObject[pScript->rgwOperand[1]].poison.wEnemyScript, wEventObjectID);
-                     break;
-                  }
-               }
-            }
+            PAL_New_AddPoisonForEnemy(wEventObjectID, wPoisonID);
+         }
+#ifdef ADD_POISON_FAIL_THEN_JUMP
+         else if (pScript->rgwOperand[2] != 0x0000 && pScript->rgwOperand[2] != 0xffff)
+         {
+            fJump = TRUE;
          }
       }
+      if (fJump == TRUE)
+      {
+         wScriptEntry = pScript->rgwOperand[2] - 1;
+      }
+#else
+   }
+#endif
       break;
+		}
+   
 
    case 0x0029:
       //
-      // Apply poison to player
+      //我方单人或者全体中毒
       //
-      if (pScript->rgwOperand[0])
+   {
+      BOOL fAll = (pScript->rgwOperand[0] == 0) ? FALSE : TRUE;
+      WORD wPoisonID = pScript->rgwOperand[1];
+      BOOL fJump = FALSE;
+      BOOL fAlwaysSuccess = FALSE;
+      INT wPoisonResistance = 0;
+
+#ifdef ADD_SOME_POISONS_SUCCESSFULLY_ANYTIME
+      if (gpGlobals->g.rgObject[pScript->rgwOperand[1]].poison.wPoisonLevel >= 5)
       {
-         //
-         // Apply to everyone
-         //
+         fAlwaysSuccess = TRUE;
+      }
+#endif
+
+   if (fAll)
+      {	// Apply to everyone
          for (i = 0; i <= gpGlobals->wMaxPartyMemberIndex; i++)
          {
             w = gpGlobals->rgParty[i].wPlayerRole;
-            if (RandomLong(1, 100) > PAL_GetPlayerPoisonResistance(w))
+            wPoisonResistance = PAL_GetPlayerPoisonResistance(w);
+            if (fAlwaysSuccess || !PAL_New_GetTrueByPercentage(wPoisonResistance))
             {
                PAL_AddPoisonForPlayer(w, pScript->rgwOperand[1]);
-            }
-         }
-      }
-      else
-      {
-         //
-         // Apply to one player
-         //
-         if (RandomLong(1, 100) > PAL_GetPlayerPoisonResistance(wEventObjectID))
-         {
-            PAL_AddPoisonForPlayer(wEventObjectID, pScript->rgwOperand[1]);
-         }
-      }
-      break;
-
-   case 0x002A:
-      //
-      // Cure poison by object ID for enemy
-      //
-      if (pScript->rgwOperand[0])
-      {
-         //
-         // Apply to all enemies
-         //
-         for (i = 0; i <= g_Battle.wMaxEnemyIndex; i++)
-         {
-            if (g_Battle.rgEnemy[i].wObjectID == 0)
-            {
-               continue;
-            }
-
-            for (j = 0; j < MAX_POISONS; j++)
-            {
-               if (g_Battle.rgEnemy[i].rgPoisons[j].wPoisonID == pScript->rgwOperand[1])
+               if (pScript->rgwOperand[1] == 556)
                {
-                  g_Battle.rgEnemy[i].rgPoisons[j].wPoisonID = 0;
-                  g_Battle.rgEnemy[i].rgPoisons[j].wPoisonScript = 0;
-                  break;
+	               PAL_SetPlayerStatus(w, 11, 320);
+               }
+               if (pScript->rgwOperand[1] == 559)
+               {
+	               PAL_SetPlayerStatus(w, 10, 320);
+               }
+               if (pScript->rgwOperand[1] == 557)
+               {
+	               PAL_SetPlayerStatus(w, 12, 320);
+               }
+               if (pScript->rgwOperand[1] == 558)
+               {
+	               PAL_SetPlayerStatus(w, 13, 320);
                }
             }
+#ifdef ADD_POISON_FAIL_THEN_JUMP
+            else if (pScript->rgwOperand[2] != 0x0000 && pScript->rgwOperand[2] != 0xffff)
+            {
+               fJump = TRUE;
+            }
+#endif
          }
       }
       else
-      {
-         //
-         // Apply to one enemy
-         //
-         for (j = 0; j < MAX_POISONS; j++)
+      {	// Apply to one player
+         wPoisonResistance = PAL_GetPlayerPoisonResistance(wEventObjectID);
+         if (fAlwaysSuccess || !PAL_New_GetTrueByPercentage(wPoisonResistance))
          {
-            if (g_Battle.rgEnemy[wEventObjectID].rgPoisons[j].wPoisonID == pScript->rgwOperand[1])
+            PAL_AddPoisonForPlayer(wEventObjectID, pScript->rgwOperand[1]);
+            if (pScript->rgwOperand[1] == 556)
             {
-               g_Battle.rgEnemy[wEventObjectID].rgPoisons[j].wPoisonID = 0;
-               g_Battle.rgEnemy[wEventObjectID].rgPoisons[j].wPoisonScript = 0;
-               break;
+               PAL_SetPlayerStatus(wEventObjectID, 11, 320);
+            }
+            if (pScript->rgwOperand[1] == 559)
+            {
+               PAL_SetPlayerStatus(wEventObjectID, 10, 320);
+            }
+            if (pScript->rgwOperand[1] == 557)
+            {
+               PAL_SetPlayerStatus(wEventObjectID, 12, 320);
+            }
+            if (pScript->rgwOperand[1] == 558)
+            {
+               PAL_SetPlayerStatus(wEventObjectID, 13, 320);
+            }
+         }
+#ifdef ADD_POISON_FAIL_THEN_JUMP
+         else if (pScript->rgwOperand[2] != 0x0000 && pScript->rgwOperand[2] != 0xffff)
+         {
+            fJump = TRUE;
+         }
+      }
+
+      if (fJump == TRUE)
+      {
+         wScriptEntry = pScript->rgwOperand[2] - 1;
+      }
+#else
+   }
+#endif
+      break;
+   }
+
+
+   case 0x002A:
+   {
+      /*
+      2A 参数1 参数2      敌方解毒指令
+      参数1 是否全体
+      参数2 中毒代号
+      作用      敌方选定对象或全体解除参数2代表的毒
+      */
+      BOOL fAll = (pScript->rgwOperand[0] == 0) ? FALSE : TRUE;
+      WORD wPoisonID = pScript->rgwOperand[1];
+
+      if (fAll)
+      {	// Apply to all enemies
+         for (i = 0; i <= g_Battle.wMaxEnemyIndex; i++)
+         {
+            if (g_Battle.rgEnemy[i].wObjectID != 0)
+            {
+               PAL_New_CurePoisonForEnemyByKind(i, wPoisonID);
             }
          }
       }
+      else
+      {	// Apply to one enemy
+         PAL_New_CurePoisonForEnemyByKind(wEventObjectID, wPoisonID);
+      }
       break;
+   }
+
+
 
    case 0x002B:
       //
@@ -1327,33 +1467,86 @@ PAL_InterpretInstruction(
       break;
 
    case 0x002D:
-      //
-      // Set the status for player
-      //
-      PAL_SetPlayerStatus(wEventObjectID, pScript->rgwOperand[0], pScript->rgwOperand[1]);
-      break;
+	//设置我方状态
+    // 参数1 状态代号
+	// 参数2 整数
+	// 参数3 脚本地址
+   {
+      BOOL fAll = (pScript->rgwOperand[0] == 0) ? FALSE : TRUE;
+      BOOL fAlwaysSuccess = FALSE;
+      INT wSorceryResistance = PAL_New_GetPlayerSorceryResistance(wEventObjectID);
 
-   case 0x002E:
-      //
-      // Set the status for enemy
-      //
-      w = g_Battle.rgEnemy[wEventObjectID].wObjectID;
 
-#ifdef PAL_CLASSIC
-      i = 9;
-#else
-      i = ((pScript->rgwOperand[0] == kStatusSlow) ? 14 : 9);
-#endif
+      INT iSuccessRate = 0;
+      WORD wBaseSuccessRate = 100;
+      WORD wStatusID = pScript->rgwOperand[0];
+      WORD wNumRound = pScript->rgwOperand[1];
 
-      if (RandomLong(0, i) > gpGlobals->g.rgObject[w].enemy.wResistanceToSorcery)
+#ifdef ADD_SOME_STATUSES_SUCCESSFULLY_ANYTIME
+      if (wStatusID >= 4 && wStatusID<=9 || pScript->rgwOperand[2] == 0xffff)	//有益状态总是成功
       {
-         g_Battle.rgEnemy[wEventObjectID].rgwStatus[pScript->rgwOperand[0]] = pScript->rgwOperand[1];
+         fAlwaysSuccess = TRUE;
+      }
+#endif
+      iSuccessRate = wBaseSuccessRate - wSorceryResistance;
+      if (fAlwaysSuccess || PAL_New_GetTrueByPercentage(iSuccessRate))
+      {   //仅对不良状态有抗性  //有益状态直接加
+         PAL_SetPlayerStatus(wEventObjectID, wStatusID, wNumRound);
+      }
+      else if (pScript->rgwOperand[2] != 0x0000 && pScript->rgwOperand[2] != 0xffff)
+      {
+         wScriptEntry = pScript->rgwOperand[2] - 1;
+      }
+      break;
+   }
+   case 0x002E:
+      /*
+设置敌方状态
+      */
+   {
+      BOOL fAlwaysSuccess = FALSE;
+      BOOL fSorceryIsFull = FALSE;
+      INT wSorceryResistance = 0.0;
+      INT iSuccessRate = 0.0;
+      INT wBaseSuccessRate = 100.0;
+      WORD wStatusID = pScript->rgwOperand[0];
+      WORD wNumRound = pScript->rgwOperand[1];
+
+      wEventObjectID = PAL_NEW_CheckAndGetLegalEnemyTarget(wEventObjectID);
+      wSorceryResistance = PAL_New_GetEnemySorceryResistance(wEventObjectID);
+      fSorceryIsFull = wSorceryResistance >= 100.0 ? TRUE : FALSE;
+
+      if (g_Battle.fPlayerMoving)
+      {
+         wPlayerRole = gpGlobals->rgParty[g_Battle.wMovingPlayerIndex].wPlayerRole;
+         wPlayerRole = PAL_NEW_CheckAndGetLegalPlayerTarget(wPlayerRole);	//如果
+      }
+
+      wPlayerRole = gpGlobals->rgParty[g_Battle.wMovingPlayerIndex].wPlayerRole;
+      INT str = PAL_GetPlayerActualFleeRate(wPlayerRole) / 50.0;
+      if (str >= 40.0)
+      {
+         str = 40.0;
+      }
+      if(wSorceryResistance == 100)
+      {
+         iSuccessRate = wBaseSuccessRate - wSorceryResistance;
+      }
+      else
+      {
+         iSuccessRate = wBaseSuccessRate + str - wSorceryResistance;
+      }
+      if (fAlwaysSuccess || !fSorceryIsFull && PAL_New_GetTrueByPercentage(iSuccessRate))
+      {
+         PAL_New_SetEnemyStatus(wEventObjectID, wStatusID, wNumRound);
       }
       else
       {
          wScriptEntry = pScript->rgwOperand[2] - 1;
       }
       break;
+		}
+
 
    case 0x002F:
       //
@@ -1366,24 +1559,28 @@ PAL_InterpretInstruction(
       //
       // Increase player's stat temporarily by percent
       //
+   {
+      INT*p;
+      p= (INT *)(&gpGlobals->rgEquipmentEffect[kBodyPartExtra]); // HACKHACK
+      INT *p1;
+      p1= (INT *)(&gpGlobals->g.PlayerRoles);
+
+      if (pScript->rgwOperand[2] == 0)
       {
-         WORD *p = (WORD *)(&gpGlobals->rgEquipmentEffect[kBodyPartExtra]); // HACKHACK
-         WORD *p1 = (WORD *)(&gpGlobals->g.PlayerRoles);
-
-         if (pScript->rgwOperand[2] == 0)
-         {
-            iPlayerRole = wEventObjectID;
-         }
-         else
-         {
-            iPlayerRole = pScript->rgwOperand[2] - 1;
-         }
-
-         p[pScript->rgwOperand[0] * MAX_PLAYER_ROLES + iPlayerRole] =
-            p1[pScript->rgwOperand[0] * MAX_PLAYER_ROLES + iPlayerRole] *
-               (SHORT)pScript->rgwOperand[1] / 100;
+         iPlayerRole = wEventObjectID;
       }
-      break;
+      else
+      {
+         iPlayerRole = pScript->rgwOperand[2] - 1;
+      }
+
+      p[pScript->rgwOperand[0] * MAX_PLAYER_ROLES + iPlayerRole] =
+         p1[pScript->rgwOperand[0] * MAX_PLAYER_ROLES + iPlayerRole] *
+         (SHORT)pScript->rgwOperand[1] / 100;
+   }
+   break;
+
+
 
    case 0x0031:
       //
@@ -1484,7 +1681,7 @@ PAL_InterpretInstruction(
       i = pScript->rgwOperand[1];
       if (i == 0)
       {
-         i = 4;
+         i = 3;
       }
       VIDEO_ShakeScreen(pScript->rgwOperand[0], i);
       if (!pScript->rgwOperand[0])
@@ -1533,16 +1730,52 @@ PAL_InterpretInstruction(
       //
       // Drain HP from enemy
       //
-      w = gpGlobals->rgParty[g_Battle.wMovingPlayerIndex].wPlayerRole;
-
-      g_Battle.rgEnemy[wEventObjectID].e.wHealth -= pScript->rgwOperand[0];
-      gpGlobals->g.PlayerRoles.rgwHP[w] += pScript->rgwOperand[0];
-
-      if (gpGlobals->g.PlayerRoles.rgwHP[w] > gpGlobals->g.PlayerRoles.rgwMaxHP[w])
+   {
+      if (pScript->rgwOperand[0])
       {
-         gpGlobals->g.PlayerRoles.rgwHP[w] = gpGlobals->g.PlayerRoles.rgwMaxHP[w];
+         //
+         // Inflict damage to all enemies
+         //
+         for (i = 0; i <= g_Battle.wMaxEnemyIndex; i++)
+         {
+            if (g_Battle.rgEnemy[i].wObjectID != 0)
+            {
+               g_Battle.rgEnemy[i].e.wHealth -= pScript->rgwOperand[1];
+            }
+			}
+
+            for (j = 0; j <= gpGlobals->wMaxPartyMemberIndex; j++)
+            {
+               w = gpGlobals->rgParty[j].wPlayerRole;
+
+               if (gpGlobals->g.PlayerRoles.rgwHP[w] > 0)
+               {
+					 gpGlobals->g.PlayerRoles.rgwHP[w] += pScript->rgwOperand[2];
+               }
+
+               if (gpGlobals->g.PlayerRoles.rgwHP[w] > PAL_GetPlayerMaxHP(w))
+               {
+	               gpGlobals->g.PlayerRoles.rgwHP[w] = PAL_GetPlayerMaxHP(w);
+               }
+            }
+         }
+      
+      else
+      {
+         //
+         // Inflict damage to one enemy
+         //
+         w = gpGlobals->rgParty[g_Battle.wMovingPlayerIndex].wPlayerRole;
+         g_Battle.rgEnemy[wEventObjectID].e.wHealth -= pScript->rgwOperand[1];
+         gpGlobals->g.PlayerRoles.rgwHP[w] += pScript->rgwOperand[2];
+
+         if (gpGlobals->g.PlayerRoles.rgwHP[w] > PAL_GetPlayerMaxHP(w))
+         {
+            gpGlobals->g.PlayerRoles.rgwHP[w] = PAL_GetPlayerMaxHP(w);
+         }
       }
       break;
+   }
 
    case 0x003A:
       //
@@ -1557,7 +1790,7 @@ PAL_InterpretInstruction(
       }
       else
       {
-         PAL_BattlePlayerEscape();
+		  PAL_BattleEnemyEscape();
       }
       break;
 
@@ -1566,7 +1799,7 @@ PAL_InterpretInstruction(
       // Ride the event object to the specified position, at a low speed
       //
       PAL_PartyRideEventObject(wEventObjectID, pScript->rgwOperand[0], pScript->rgwOperand[1],
-         pScript->rgwOperand[2], 2);
+         pScript->rgwOperand[2], 5);
       break;
 
    case 0x0040:
@@ -1611,7 +1844,7 @@ PAL_InterpretInstruction(
       // Ride the event object to the specified position, at the normal speed
       //
       PAL_PartyRideEventObject(wEventObjectID, pScript->rgwOperand[0], pScript->rgwOperand[1],
-         pScript->rgwOperand[2], 4);
+         pScript->rgwOperand[2], 12);
       break;
 
    case 0x0045:
@@ -1685,7 +1918,8 @@ PAL_InterpretInstruction(
       //
       // Nullify the event object for a short while
       //
-      pEvtObj->sVanishTime = -15;
+	   pEvtObj->sState *= -1;
+	   pEvtObj->sVanishTime = 3000;
       break;
 
    case 0x004C:
@@ -1697,12 +1931,12 @@ PAL_InterpretInstruction(
 
       if (i == 0)
       {
-         i = 8;
+         i = 10;
       }
 
       if (j == 0)
       {
-         j = 4;
+         j = 5;
       }
 
       PAL_MonsterChasePlayer(wEventObjectID, j, i, pScript->rgwOperand[2]);
@@ -1754,7 +1988,12 @@ PAL_InterpretInstruction(
       // hide the event object for a while, default 800 frames
       //
       pEvtObj->sState *= -1;
-      pEvtObj->sVanishTime = (pScript->rgwOperand[0] ? pScript->rgwOperand[0] : 800);
+      pEvtObj->sVanishTime = 1300;
+	  if (gpGlobals->fDoAutoSave == TRUE)
+	  {
+		  PAL_AutoSaveGame();
+		  gpGlobals->fDoAutoSave = FALSE;
+	  }
       break;
 
    case 0x0053:
@@ -1803,16 +2042,22 @@ PAL_InterpretInstruction(
       PAL_RemoveMagic(i, pScript->rgwOperand[0]);
       break;
 
+	  //根据真气体力设定仙术的基础伤害值
    case 0x0057:
-      //
-      // Set the base damage of magic according to MP value
-      //
-      i = ((pScript->rgwOperand[1] == 0) ? 8 : pScript->rgwOperand[1]);
+   {
+      INT iBaseDamage = 0;
+      INT iCostHP = gpGlobals->g.PlayerRoles.rgwHP[wEventObjectID];
+      INT iCostMP = gpGlobals->g.PlayerRoles.rgwMP[wEventObjectID];
+
+      i = ((pScript->rgwOperand[1] = 10));
       j = gpGlobals->g.rgObject[pScript->rgwOperand[0]].magic.wMagicNumber;
-      gpGlobals->g.lprgMagic[j].wBaseDamage =
-         gpGlobals->g.PlayerRoles.rgwMP[wEventObjectID] * i;
-      gpGlobals->g.PlayerRoles.rgwMP[wEventObjectID] = 0;
+      iBaseDamage = (iCostMP + iCostHP )* i;
+      gpGlobals->g.lprgMagic[j].wBaseDamage = iBaseDamage;
+      gpGlobals->g.PlayerRoles.rgwMP[wEventObjectID] -= iCostMP;
+      gpGlobals->g.PlayerRoles.rgwHP[wEventObjectID] -= iCostHP;
+      gpGlobals->g.PlayerRoles.rgwHP[wEventObjectID] = 1;
       break;
+   }
 
    case 0x0058:
       //
@@ -1835,6 +2080,7 @@ PAL_InterpretInstruction(
          //
          // Set data to load the scene in the next frame
          //
+		  gpGlobals->fDoAutoSave = TRUE;
          gpGlobals->wNumScene = pScript->rgwOperand[0];
          PAL_SetLoadFlags(kLoadScene);
          gpGlobals->fEnteringScene = TRUE;
@@ -1859,7 +2105,7 @@ PAL_InterpretInstruction(
       {
          w = pScript->rgwOperand[0];
       }
-      g_Battle.rgEnemy[wEventObjectID].e.wHealth -= w;
+      g_Battle.rgEnemy[wEventObjectID].e.wHealth -= pScript->rgwOperand[0];
       break;
 
    case 0x005C:
@@ -1916,7 +2162,7 @@ PAL_InterpretInstruction(
       //
       // Jump if player is not poisoned
       //
-      if (!PAL_IsPlayerPoisonedByLevel(wEventObjectID, 1))
+      if (PAL_New_IsPlayerPoisoned(wEventObjectID) == FALSE) //之前用的函数不能正确判断等级为0的毒，比如赤毒
       {
          wScriptEntry = pScript->rgwOperand[0] - 1;
       }
@@ -1942,9 +2188,8 @@ PAL_InterpretInstruction(
       //
       // Jump if enemy's HP is more than the specified percentage
       //
-      i = gpGlobals->g.rgObject[g_Battle.rgEnemy[wEventObjectID].wObjectID].enemy.wEnemyID;
-      if ((INT)(g_Battle.rgEnemy[wEventObjectID].e.wHealth) * 100 >
-         (INT)(gpGlobals->g.lprgEnemy[i].wHealth) * pScript->rgwOperand[0])
+      if ((g_Battle.rgEnemy[wEventObjectID].e.wHealth) * 100 >
+         (g_Battle.rgEnemy[wEventObjectID].iMaxHealth)* pScript->rgwOperand[0])
       {
          wScriptEntry = pScript->rgwOperand[1] - 1;
       }
@@ -1966,8 +2211,12 @@ PAL_InterpretInstruction(
       //
       // Throw weapon to enemy
       //
-      w = pScript->rgwOperand[1] * 5;
-      w += gpGlobals->g.PlayerRoles.rgwAttackStrength[gpGlobals->rgParty[g_Battle.wMovingPlayerIndex].wPlayerRole] * RandomFloat(0, 4);
+      w = pScript->rgwOperand[1]*5;
+      w += PAL_GetPlayerActualAttackStrength(gpGlobals->rgParty[g_Battle.wMovingPlayerIndex].wPlayerRole) * RandomFloat(0, 3);
+      if (gpGlobals->rgPlayerStatus[gpGlobals->rgParty[g_Battle.wMovingPlayerIndex].wPlayerRole][kStatusBravery] > 0)
+      {
+         w *= 2;
+      }
       PAL_BattleSimulateMagic((SHORT)wEventObjectID, pScript->rgwOperand[0], w);
       break;
 
@@ -2001,7 +2250,8 @@ PAL_InterpretInstruction(
       //
       // Steal from the enemy
       //
-      PAL_BattleStealFromEnemy(wEventObjectID, pScript->rgwOperand[0]);
+      // PAL_BattleStealFromEnemy(wEventObjectID, pScript->rgwOperand[0]);
+      PAL_BattleStealFromEnemy(wEventObjectID,10);
       break;
 
    case 0x006B:
@@ -2106,12 +2356,12 @@ PAL_InterpretInstruction(
 
    case 0x0074:
       //
-      // Jump if not all players are full HP
+      // Jump if not all players are full HP MP
       //
       for (i = 0; i <= gpGlobals->wMaxPartyMemberIndex; i++)
       {
          w = gpGlobals->rgParty[i].wPlayerRole;
-         if (gpGlobals->g.PlayerRoles.rgwHP[w] < gpGlobals->g.PlayerRoles.rgwMaxHP[w])
+         if (gpGlobals->g.PlayerRoles.rgwHP[w] < PAL_GetPlayerMaxHP(w) || gpGlobals->g.PlayerRoles.rgwMP[w] < PAL_GetPlayerMaxMP(w))
          {
             wScriptEntry = pScript->rgwOperand[0] - 1;
             break;
@@ -2124,14 +2374,44 @@ PAL_InterpretInstruction(
       // Set the player party
       //
       gpGlobals->wMaxPartyMemberIndex = 0;
-      for (i = 0; i < 3; i++)
-      {
-         if (pScript->rgwOperand[i] != 0)
+      if (pScript->rgwOperand[0] >= 0x0010) {
+         WORD pattern = pScript->rgwOperand[0];
+         UTIL_LogOutput(LOGLEVEL_DEBUG, "Special party pattern: %.4x", pattern);
+         WORD party[4] = { 0, 1, 2, 4 };
+         if (pattern >= 0x0020)
          {
-            gpGlobals->rgParty[gpGlobals->wMaxPartyMemberIndex].wPlayerRole =
-               pScript->rgwOperand[i] - 1;
-
+            party[0] = 1;
+            party[1] = 0;
+            party[2] = 2;
+            party[3] = 4;
+         }
+         if (pattern >= 0x0030)
+         {
+            party[0] = 2;
+            party[1] = 1;
+            party[2] = 0;
+            party[3] = 4;
+         }
+         if (pattern >= 0x0040)
+         {
+            party[0] = 4;
+            party[1] = 0;
+            party[2] = 2;
+            party[3] = 1;
+         }
+         for (i = 0; i < 4; i++) {
+            gpGlobals->rgParty[gpGlobals->wMaxPartyMemberIndex].wPlayerRole = party[i];
             gpGlobals->wMaxPartyMemberIndex++;
+         }
+      }
+      else {
+         for (i = 0; i < 3; i++) {
+            if (pScript->rgwOperand[i] != 0) {
+               gpGlobals->rgParty[gpGlobals->wMaxPartyMemberIndex].wPlayerRole =
+	               pScript->rgwOperand[i] - 1;
+
+               gpGlobals->wMaxPartyMemberIndex++;
+            }
          }
       }
 
@@ -2183,6 +2463,7 @@ PAL_InterpretInstruction(
       //
       // FIXME: ???
       //
+	   gpGlobals->fDoAutoSave = TRUE;
       break;
 
    case 0x0079:
@@ -2204,7 +2485,7 @@ PAL_InterpretInstruction(
       //
       // Walk the party to the specified position, at a higher speed
       //
-      PAL_PartyWalkTo(pScript->rgwOperand[0], pScript->rgwOperand[1], pScript->rgwOperand[2], 4);
+      PAL_PartyWalkTo(pScript->rgwOperand[0], pScript->rgwOperand[1], pScript->rgwOperand[2], 6);
       break;
 
    case 0x007B:
@@ -2221,7 +2502,7 @@ PAL_InterpretInstruction(
       if ((wEventObjectID & 1) ^ (gpGlobals->dwFrameNum & 1))
       {
          if (!PAL_NPCWalkTo(wEventObjectID, pScript->rgwOperand[0], pScript->rgwOperand[1],
-            pScript->rgwOperand[2], 4))
+            pScript->rgwOperand[2], 8))
          {
             wScriptEntry--;
          }
@@ -2397,7 +2678,7 @@ PAL_InterpretInstruction(
       // Walk straight to the specified position, at a high speed
       //
       if (!PAL_NPCWalkTo(wEventObjectID, pScript->rgwOperand[0], pScript->rgwOperand[1],
-         pScript->rgwOperand[2], 8))
+         pScript->rgwOperand[2], 14))
       {
          wScriptEntry--;
       }
@@ -2508,10 +2789,10 @@ PAL_InterpretInstruction(
       //
       // Set the base damage of magic according to amount of money
       //
-      i = ((gpGlobals->dwCash > 5000) ? 5000 : gpGlobals->dwCash);
+      i = ((gpGlobals->dwCash > 20000) ? 20000 : gpGlobals->dwCash);
       gpGlobals->dwCash -= i;
       j = gpGlobals->g.rgObject[pScript->rgwOperand[0]].magic.wMagicNumber;
-      gpGlobals->g.lprgMagic[j].wBaseDamage = i * 2 / 5;
+      gpGlobals->g.lprgMagic[j].wBaseDamage = i * 2 / 4;
       break;
 
    case 0x0089:
@@ -2553,13 +2834,40 @@ PAL_InterpretInstruction(
       // Increase player's level
       //
       PAL_PlayerLevelUp(wEventObjectID, pScript->rgwOperand[0]);
+	  gpGlobals->g.PlayerRoles.rgwHP[wEventObjectID] = PAL_GetPlayerMaxHP(wEventObjectID);
+	  gpGlobals->g.PlayerRoles.rgwMP[wEventObjectID] = PAL_GetPlayerMaxMP(wEventObjectID);
+
+
+		  w = gpGlobals->rgParty[i].wPlayerRole;
+		  j = 0;
+		  {
+			  while (j < gpGlobals->g.nLevelUpMagic)
+			  {
+				  if (gpGlobals->g.lprgLevelUpMagic[j].m[wEventObjectID].wMagic == 0 ||
+					  gpGlobals->g.lprgLevelUpMagic[j].m[wEventObjectID].wLevel > gpGlobals->g.PlayerRoles.rgwLevel[wEventObjectID])
+				  {
+					  j++;
+					  continue;
+				  }
+
+				  if (PAL_AddMagic(wEventObjectID, gpGlobals->g.lprgLevelUpMagic[j].m[wEventObjectID].wMagic))
+				  {
+					  PAL_StartDialog(kDialogCenterWindow, 0, 0, FALSE);
+					  PAL_swprintf(s, sizeof(s) / sizeof(WCHAR), L"%ls%ls%ls", PAL_GetWord(gpGlobals->g.PlayerRoles.rgwName[wEventObjectID]), PAL_GetWord(BATTLEWIN_ADDMAGIC_LABEL), PAL_GetWord(gpGlobals->g.lprgLevelUpMagic[j].m[wEventObjectID].wMagic));
+					  PAL_ShowDialogText(s);
+				  }
+
+				  j++;
+			  }
+		  }
+	  
       break;
 
    case 0x008F:
       //
-      // Halve the cash amount
+      // 消耗所有金钱
       //
-      gpGlobals->dwCash /= 2;
+      gpGlobals->dwCash = 0;
       break;
 
    case 0x0090:
@@ -2726,7 +3034,7 @@ PAL_InterpretInstruction(
 
    case 0x009C:
       //
-      // Enemy division itself
+      // Enemy duplicate itself
       //
       w = 0;
 
@@ -2771,6 +3079,7 @@ PAL_InterpretInstruction(
 
             g_Battle.rgEnemy[i].wObjectID = g_Battle.rgEnemy[wEventObjectID].wObjectID;
             g_Battle.rgEnemy[i].e = g_Battle.rgEnemy[wEventObjectID].e;
+            g_Battle.rgEnemy[i].iMaxHealth = g_Battle.rgEnemy[wEventObjectID].iMaxHealth;
             g_Battle.rgEnemy[i].e.wHealth = (g_Battle.rgEnemy[wEventObjectID].e.wHealth+y)/x;
             g_Battle.rgEnemy[i].wScriptOnTurnStart = g_Battle.rgEnemy[wEventObjectID].wScriptOnTurnStart;
             g_Battle.rgEnemy[i].wScriptOnBattleEnd = g_Battle.rgEnemy[wEventObjectID].wScriptOnBattleEnd;
@@ -2783,6 +3092,7 @@ PAL_InterpretInstruction(
          }
       }
       g_Battle.rgEnemy[wCurEventObjectID].e.wHealth = (g_Battle.rgEnemy[wEventObjectID].e.wHealth+y)/x;
+      g_Battle.rgEnemy[wEventObjectID].e.wHealth = g_Battle.rgEnemy[wCurEventObjectID].e.wHealth;
 
       w = 0;
       for (i = 0; i < MAX_ENEMIES_IN_TEAM; i++)
@@ -2818,34 +3128,36 @@ PAL_InterpretInstruction(
       PAL_BattleDelay(1, 0, TRUE);
       break;
 
+   case 0x009d:
+      break;
+
+
    case 0x009E:
       //
       // Enemy summons another monster
       //
-      x = 0;
-      w = pScript->rgwOperand[0];
-      y = (((SHORT)(pScript->rgwOperand[1]) <= 0) ? 1 : (SHORT)pScript->rgwOperand[1]);
+   {
+      WORD wEmptyEnemySiteNum = 0;
+      WORD wNewEnemyID = pScript->rgwOperand[0];//召唤怪物的id
+      WORD wNewEnemyNum = max(pScript->rgwOperand[1], 1);//召唤怪物的数量
 
-      if (w == 0 || w == 0xFFFF)
+      if (wNewEnemyID == 0 || wNewEnemyID == 0xFFFF)
       {
-         w = g_Battle.rgEnemy[wEventObjectID].wObjectID;
+         wNewEnemyID = g_Battle.rgEnemy[wEventObjectID].wObjectID;
       }
 
       for (i = 0; i <= g_Battle.wMaxEnemyIndex; i++)
       {
          if (g_Battle.rgEnemy[i].wObjectID == 0)
          {
-            x++;
+            wEmptyEnemySiteNum++;
          }
       }
 
-      if (x < y || g_Battle.iHidingTime > 0 ||
-         g_Battle.rgEnemy[wEventObjectID].rgwStatus[kStatusSleep] != 0 ||
-         g_Battle.rgEnemy[wEventObjectID].rgwStatus[kStatusParalyzed] != 0 ||
-         g_Battle.rgEnemy[wEventObjectID].rgwStatus[kStatusConfused] != 0)
+      if (wEmptyEnemySiteNum < wNewEnemyNum || !PAL_New_IfEnemyCanMove(wEventObjectID))
       {
          if (pScript->rgwOperand[2] != 0)
-         {
+         {	//召唤失败，则跳转
             wScriptEntry = pScript->rgwOperand[2] - 1;
          }
       }
@@ -2857,20 +3169,23 @@ PAL_InterpretInstruction(
             {
                memset(&(g_Battle.rgEnemy[i]), 0, sizeof(BATTLEENEMY));
 
-               g_Battle.rgEnemy[i].wObjectID = w;
-               g_Battle.rgEnemy[i].e = gpGlobals->g.lprgEnemy[gpGlobals->g.rgObject[w].enemy.wEnemyID];
-
+               g_Battle.rgEnemy[i].wObjectID = wNewEnemyID;
+               g_Battle.rgEnemy[i].e = gpGlobals->g.lprgEnemy[gpGlobals->g.rgObject[wNewEnemyID].enemy.wEnemyID];
+				//   g_Battle.rgEnemy[i].e.wHealth = g_Battle.rgEnemy[wEventObjectID].e.wHealth;
+#ifdef STRENGTHEN_ENEMY
+               g_Battle.rgEnemy[i] = PAL_New_StrengthenEnemy(g_Battle.rgEnemy[i]);
+#endif
                g_Battle.rgEnemy[i].state = kFighterWait;
-               g_Battle.rgEnemy[i].wScriptOnTurnStart = gpGlobals->g.rgObject[w].enemy.wScriptOnTurnStart;
-               g_Battle.rgEnemy[i].wScriptOnBattleEnd = gpGlobals->g.rgObject[w].enemy.wScriptOnBattleEnd;
-               g_Battle.rgEnemy[i].wScriptOnReady = gpGlobals->g.rgObject[w].enemy.wScriptOnReady;
+               g_Battle.rgEnemy[i].wScriptOnTurnStart = gpGlobals->g.rgObject[wNewEnemyID].enemy.wScriptOnTurnStart;
+               g_Battle.rgEnemy[i].wScriptOnBattleEnd = gpGlobals->g.rgObject[wNewEnemyID].enemy.wScriptOnBattleEnd;
+               g_Battle.rgEnemy[i].wScriptOnReady = gpGlobals->g.rgObject[wNewEnemyID].enemy.wScriptOnReady;
                g_Battle.rgEnemy[i].flTimeMeter = 50;
                g_Battle.rgEnemy[i].iColorShift = 8;
 
-               y--;
-               if (y <= 0)
+               wNewEnemyNum--;
+               if (wNewEnemyNum <= 0)
                {
-                  break;
+	               break;
                }
             }
          }
@@ -2893,40 +3208,51 @@ PAL_InterpretInstruction(
          PAL_BattleFadeScene();
       }
       break;
+   }
 
    case 0x009F:
       //
       // Enemy transforms into something else
       //
-      if (g_Battle.iHidingTime <= 0 &&
-         g_Battle.rgEnemy[wEventObjectID].rgwStatus[kStatusSleep] == 0 &&
-         g_Battle.rgEnemy[wEventObjectID].rgwStatus[kStatusParalyzed] == 0 &&
-         g_Battle.rgEnemy[wEventObjectID].rgwStatus[kStatusConfused] == 0)
+   {
+      WORD wEnemyIndex = wEventObjectID;
+      WORD wNewEnemyID = pScript->rgwOperand[0];
+
+      if (PAL_New_IfEnemyCanMove(wEnemyIndex))
       {
-         w = g_Battle.rgEnemy[wEventObjectID].e.wHealth;
+         WORD wPrveLevel = g_Battle.rgEnemy[wEnemyIndex].e.wLevel;
+         WORD wPrevCollectValue = g_Battle.rgEnemy[wEnemyIndex].e.wCollectValue;
+         WORD wPrevExp = g_Battle.rgEnemy[wEnemyIndex].e.wExp;
+         w = g_Battle.rgEnemy[wEnemyIndex].e.wHealth;
 
-         g_Battle.rgEnemy[wEventObjectID].wObjectID = pScript->rgwOperand[0];
-         g_Battle.rgEnemy[wEventObjectID].e =
-            gpGlobals->g.lprgEnemy[gpGlobals->g.rgObject[pScript->rgwOperand[0]].enemy.wEnemyID];
+         g_Battle.rgEnemy[wEnemyIndex].wObjectID = wNewEnemyID;
+         g_Battle.rgEnemy[wEnemyIndex].e =
+            gpGlobals->g.lprgEnemy[gpGlobals->g.rgObject[wNewEnemyID].enemy.wEnemyID];
 
-         g_Battle.rgEnemy[wEventObjectID].e.wHealth = w;
-         g_Battle.rgEnemy[wEventObjectID].wCurrentFrame = 0;
+         g_Battle.rgEnemy[wEnemyIndex].e.wLevel = max(g_Battle.rgEnemy[wEnemyIndex].e.wLevel, wPrveLevel);
+         g_Battle.rgEnemy[wEnemyIndex].e.wCollectValue = max(g_Battle.rgEnemy[wEnemyIndex].e.wCollectValue, wPrevCollectValue);
+         g_Battle.rgEnemy[wEnemyIndex].e.wExp = max(g_Battle.rgEnemy[wEnemyIndex].e.wExp, wPrevExp);
+         g_Battle.rgEnemy[wEnemyIndex].e.wHealth = w;
+         g_Battle.rgEnemy[wEnemyIndex].wCurrentFrame = 0;
+         g_Battle.rgEnemy[wEnemyIndex].wScriptOnBattleEnd =
+            gpGlobals->g.rgObject[wNewEnemyID].enemy.wScriptOnBattleEnd; //修正怪物变身后的战后脚本
 
-         for (i = 0; i < 6; i++)
+         for (i = 0; i < MAX_ENEMIES_IN_TEAM; i++)
          {
-            g_Battle.rgEnemy[wEventObjectID].iColorShift = i;
+            g_Battle.rgEnemy[wEnemyIndex].iColorShift = i;
             PAL_BattleDelay(1, 0, FALSE);
          }
 
-         g_Battle.rgEnemy[wEventObjectID].iColorShift = 0;
+         g_Battle.rgEnemy[wEnemyIndex].iColorShift = 0;
 
-		 AUDIO_PlaySound(47);
+         AUDIO_PlaySound(212);
          VIDEO_BackupScreen(g_Battle.lpSceneBuf);
          PAL_LoadBattleSprites();
          PAL_BattleMakeScene();
          PAL_BattleFadeScene();
       }
       break;
+   }
 
    case 0x00A0:
       //
@@ -3010,6 +3336,480 @@ PAL_InterpretInstruction(
       //
       VIDEO_BackupScreen(gpScreen);
       break;
+	
+
+   case 0x00A8:
+      // Remove character enhancements
+         PAL_RemovePlayerStatus(wEventObjectID, 5);
+         PAL_RemovePlayerStatus(wEventObjectID, 6);
+         PAL_RemovePlayerStatus(wEventObjectID, 7);
+         PAL_RemovePlayerStatus(wEventObjectID, 8);
+         PAL_RemovePlayerStatus(wEventObjectID, 9);
+         PAL_RemovePlayerStatus(wEventObjectID, 14);
+         PAL_RemoveEquipmentEffect(wEventObjectID, kBodyPartExtra);
+      break;
+   
+   case 0x00A9:
+      //
+      //All of us are silent
+      //
+   {
+      for (i = 0; i <= gpGlobals->wMaxPartyMemberIndex; i++)
+      {
+         w = gpGlobals->rgParty[i].wPlayerRole;
+         if (RandomLong(0, 100) > PAL_New_GetPlayerSorceryResistance(w))
+         {
+            PAL_SetPlayerStatus(w, 3, 3);
+         }
+      }
+      break;
+   }
+
+   case 0x00AA:
+      //
+      // Set the direction and/or gesture for event object
+      //
+      if (pScript->rgwOperand[0] != 0)
+      {
+         pCurrent->wDirection = pScript->rgwOperand[1];
+      }
+      if (pScript->rgwOperand[2] != 0)
+      {
+         pCurrent->wCurrentFrameNum = pScript->rgwOperand[2];
+      }
+      break;
+
+   case 0x00AB:
+      //
+      // Percentage Increase/decrease player's HP 
+      //
+      if (pScript->rgwOperand[0])
+      {
+         //
+         // Apply to everyone
+         //
+         g_fScriptSuccess = FALSE;
+         for (i = 0; i <= gpGlobals->wMaxPartyMemberIndex; i++)
+         {
+            w = gpGlobals->rgParty[i].wPlayerRole;
+            if (PAL_IncreaseHPMP(w, PAL_GetPlayerMaxHP(w) * (SHORT)pScript->rgwOperand[1] / 100, 0))
+               g_fScriptSuccess = TRUE;
+         }
+      }
+      else
+      {
+         //
+         // Apply to one player
+         //
+         if (!PAL_IncreaseHPMP(wEventObjectID, PAL_GetPlayerMaxHP(wEventObjectID) * (SHORT)pScript->rgwOperand[1] / 100, 0))
+         {
+            g_fScriptSuccess = FALSE;
+         }
+      }
+      break;
+
+   case 0x00AC:
+      //
+      // Percentage Increase/decrease player's MP
+      //
+      if (pScript->rgwOperand[0])
+      {
+         //
+         // Apply to everyone
+         //
+         g_fScriptSuccess = FALSE;
+         for (i = 0; i <= gpGlobals->wMaxPartyMemberIndex; i++)
+         {
+            w = gpGlobals->rgParty[i].wPlayerRole;
+            if (PAL_IncreaseHPMP(w, 0,PAL_GetPlayerMaxMP(w) * (SHORT)pScript->rgwOperand[1] / 100))
+               g_fScriptSuccess = TRUE;
+         }
+      }
+      else
+      {
+         //
+         // Apply to one player
+         //
+         if (!PAL_IncreaseHPMP(wEventObjectID, 0 ,PAL_GetPlayerMaxMP(wEventObjectID) * (SHORT)pScript->rgwOperand[1] / 100))
+         {
+            g_fScriptSuccess = FALSE;
+         }
+      }
+      break;
+
+   case 0x00AD:
+      //
+      // 打开灵葫商店
+      //
+      PAL_MakeScene();
+      VIDEO_UpdateScreen(NULL);
+      PAL_BuyLingHu(0);
+      break;
+
+   case 0x00AE:
+      //
+      // 指定对象置帧
+      //
+      if (pScript->rgwOperand[0] != 0)
+      {
+         pCurrent->wCurrentFrameNum = pScript->rgwOperand[1];
+         pCurrent->wDirection = kDirSouth;
+      }
+      break;
+
+   case 0x00AF:
+   {
+      //
+      //我方全体百分比增加临时属性
+      //
+      INT*p;
+      p = (INT *)(&gpGlobals->rgEquipmentEffect[kBodyPartExtra]); // HACKHACK
+      INT *p1;
+      p1 = (INT *)(&gpGlobals->g.PlayerRoles);
+
+
+         for (i = 0; i <= gpGlobals->wMaxPartyMemberIndex; i++)
+         {
+            w = gpGlobals->rgParty[i].wPlayerRole;
+            p[pScript->rgwOperand[0] * MAX_PLAYER_ROLES + w] =
+               p1[pScript->rgwOperand[0] * MAX_PLAYER_ROLES + w] * 0.3;
+         }
+   }
+      break;
+
+   case 0x00b0:
+      //
+      // 张四哥划船
+      //
+      PAL_PartyRideEventObject(wEventObjectID, pScript->rgwOperand[0], pScript->rgwOperand[1],
+         pScript->rgwOperand[2], 2);
+      break;
+
+   case 0x00b1:
+      //
+      // 本对象慢速走到
+      //
+      if ((wEventObjectID & 1) ^ (gpGlobals->dwFrameNum & 1))
+      {
+         if (!PAL_NPCWalkTo(wEventObjectID, pScript->rgwOperand[0], pScript->rgwOperand[1],
+            pScript->rgwOperand[2], 2))
+         {
+            wScriptEntry--;
+         }
+      }
+      else
+      {
+         wScriptEntry--;
+      }
+      break;
+
+   case 0x00B2:
+      //
+      // Percentage of blood loss
+      //
+   {
+      UINT w;
+	  if (PAL_IsPlayerPoisonedByKind(wEventObjectID, 563) || PAL_GetPlayerPoisonResistance(wEventObjectID) == 100)
+	  {
+		  w = g_Battle.rgEnemy[wEventObjectID].iMaxHealth*0.03;
+	  }
+	  else
+	  {
+		  w = g_Battle.rgEnemy[wEventObjectID].iMaxHealth*0.06;
+	  }
+      if (gpGlobals->g.PlayerRoles.rgwHP[RoleID_ANu] > 0)
+      {
+         g_Battle.rgEnemy[wEventObjectID].e.wHealth -= w;
+      }
+      else
+      {
+         PAL_New_CurePoisonForEnemyByKind(wEventObjectID, 629);
+      }
+
+      if (g_Battle.rgEnemy[wEventObjectID].e.wHealth > g_Battle.rgEnemy[wEventObjectID].iMaxHealth)
+      {
+         g_Battle.rgEnemy[wEventObjectID].e.wHealth = 0;
+      }
+      break;
+   }
+
+   case 0x00B3:
+      //
+      // 
+      gpGlobals->g.PlayerRoles.rgwHP[wEventObjectID] /= 2;
+      gpGlobals->g.PlayerRoles.rgwMP[wEventObjectID] /= 2;
+      break;
+
+   case 0x00B4:
+      //
+      // Increase/decrease player's HP
+      //
+      if (pScript->rgwOperand[0])
+      {
+         g_fScriptSuccess = FALSE;
+         //
+         // Apply to everyone
+         //
+         for (i = 0; i <= gpGlobals->wMaxPartyMemberIndex; i++)
+         {
+            w = gpGlobals->rgParty[i].wPlayerRole;
+            if (PAL_IncreaseHPMP(w, 600 + PAL_GetPlayerMaxHP(w)* 0.25, 0))
+               g_fScriptSuccess = TRUE;
+         }
+      }
+      break;
+
+   case 0x00B5:
+      //
+      // Jump if player's HP is more than the specified percentage
+      //
+      if ((gpGlobals->g.PlayerRoles.rgwHP[wEventObjectID]) * 100 >
+         (PAL_GetPlayerMaxHP(wEventObjectID)* pScript->rgwOperand[0]))
+      {
+         wScriptEntry = pScript->rgwOperand[1] - 1;
+      }
+      break;
+
+   case 0x00B6:
+      //
+      // 偷取我方道具
+      //
+   {
+      srand(time(NULL));
+      int  index = 61 + rand() % (259 - 61 + 1);
+      int c = 200 + rand() % (3000 - 200);
+      
+	  if (index !=93 || index != 113 || index != 114 || index != 118 || index != 145 || index != 168)
+	  {
+		  if (PAL_GetItemAmount(index) >= 1)
+		  {
+			  PAL_AddItemToInventory(index, -1);
+			  PAL_swprintf(s, sizeof(s) / sizeof(WCHAR), L"%ls @%ls@", L"丢失", PAL_GetWord(index));
+			  PAL_StartDialog(kDialogCenterWindow, 0, 0, FALSE);
+			  PAL_ShowDialogText(s);
+		  }
+		  else if (PAL_GetItemAmount(index) >= 1)
+		  {
+			  PAL_AddItemToInventory(index, -1);
+			  PAL_swprintf(s, sizeof(s) / sizeof(WCHAR), L"%ls @%ls@", L"丢失", PAL_GetWord(index));
+			  PAL_StartDialog(kDialogCenterWindow, 0, 0, FALSE);
+			  PAL_ShowDialogText(s);
+		  }
+		  else if (gpGlobals->dwCash > 3000)
+		  {
+			  gpGlobals->dwCash -= c;
+			  PAL_swprintf(s, sizeof(s) / sizeof(WCHAR), L"@%ls@%d@%ls@", L"丢失", c, PAL_GetWord(10));
+			  PAL_StartDialog(kDialogCenterWindow, 0, 0, FALSE);
+			  PAL_ShowDialogText(s);
+		  }
+		  else
+		  {
+			  PAL_swprintf(s, sizeof(s) / sizeof(WCHAR), L"%ls", L"偷窃失败");
+			  PAL_StartDialog(kDialogCenterWindow, 0, 0, FALSE);
+			  PAL_ShowDialogText(s);
+		  }
+	  }
+      break;
+   }
+
+   case 0x00b7:
+      //
+      // 敌方全体百分比恢复血量
+      //
+
+      for (i = 0; i <= g_Battle.wMaxEnemyIndex; i++)
+      {
+         if (g_Battle.rgEnemy[i].wObjectID != 0)
+         {
+            g_Battle.rgEnemy[i].e.wHealth += g_Battle.rgEnemy[i].iMaxHealth * 0.1;
+         }
+         if (g_Battle.rgEnemy[i].e.wHealth > g_Battle.rgEnemy[i].iMaxHealth)
+         {
+            g_Battle.rgEnemy[i].e.wHealth = g_Battle.rgEnemy[i].iMaxHealth;
+         }
+
+      }
+      break;
+
+   case 0x00b8:
+      //提升一半防御
+         for (i = 0; i <= gpGlobals->wMaxPartyMemberIndex; i++)
+         {
+            WORD w = gpGlobals->rgParty[i].wPlayerRole;
+            PAL_SetPlayerStatus(w, 14, 99);
+         }
+      break;
+   
+
+   case 0x00B9:
+      //
+      // 当我方死亡，敌方回复体力
+      //
+      //
+      for (i = 0; i <= gpGlobals->wMaxPartyMemberIndex; i++)
+      {
+         w = gpGlobals->rgParty[i].wPlayerRole;
+         if (gpGlobals->g.PlayerRoles.rgwHP[w] == 0)
+         {
+            g_Battle.rgEnemy[wEventObjectID].e.wHealth += (PAL_GetPlayerMaxHP(w) * 3);
+         }
+         else if (gpGlobals->g.PlayerRoles.rgwHP[w] == 0 && g_Battle.rgEnemy[wEventObjectID].e.wLevel >= 150)
+         {
+            g_Battle.rgEnemy[wEventObjectID].e.wHealth += (PAL_GetPlayerMaxHP(w) * 6);
+         }
+
+         if (g_Battle.rgEnemy[wEventObjectID].e.wHealth > g_Battle.rgEnemy[wEventObjectID].iMaxHealth)
+         {
+            g_Battle.rgEnemy[wEventObjectID].e.wHealth = g_Battle.rgEnemy[wEventObjectID].iMaxHealth;
+         }
+      }
+      break;
+
+
+   case 0x00BA:
+      //
+      // 获得经验值
+      //
+      //
+   {
+      WCHAR s[256];
+      DWORD dwExp;
+      BOOL   fLevelUp;
+      for (i = 0; i <= gpGlobals->wMaxPartyMemberIndex; i++)
+      {
+         w = gpGlobals->rgParty[i].wPlayerRole;
+         gpGlobals->Exp.rgPrimaryExp[w].wExp += pScript->rgwOperand[0] * 2;
+         PAL_StartDialog(kDialogCenterWindow, 0, 0, FALSE);
+         PAL_swprintf(s, sizeof(s) / sizeof(WCHAR), L"%ls%ls%d%ls", PAL_GetWord(gpGlobals->g.PlayerRoles.rgwName[w]), PAL_GetWord(34), pScript->rgwOperand[0] * 2, PAL_GetWord(2));
+         PAL_ShowDialogText(s);
+      }
+   
+      for (i = 0; i <= gpGlobals->wMaxPartyMemberIndex; i++)
+      {
+         fLevelUp = FALSE;
+         w = gpGlobals->rgParty[i].wPlayerRole;
+         dwExp = gpGlobals->Exp.rgPrimaryExp[w].wExp;
+         while (dwExp >= PAL_GetLevelUpBaseExp(gpGlobals->g.PlayerRoles.rgwLevel[w]))
+         {
+            dwExp -= PAL_GetLevelUpBaseExp(gpGlobals->g.PlayerRoles.rgwLevel[w]);
+
+            if (gpGlobals->g.PlayerRoles.rgwLevel[w] < MAX_LEVELS)
+            {
+               fLevelUp = TRUE;
+               PAL_PlayerLevelUp(w, 1);
+
+	               gpGlobals->g.PlayerRoles.rgwHP[w] = PAL_GetPlayerMaxHP(w);
+	               gpGlobals->g.PlayerRoles.rgwMP[w] = PAL_GetPlayerMaxMP(w);
+               
+            }
+         }
+         gpGlobals->Exp.rgPrimaryExp[w].wExp = (DWORD)dwExp;
+         if (fLevelUp)
+         {
+            PAL_StartDialog(kDialogCenterWindow, 0, 0, FALSE);
+            PAL_swprintf(s, sizeof(s) / sizeof(WCHAR), L"%ls%ls%ls", PAL_GetWord(gpGlobals->g.PlayerRoles.rgwName[w]), PAL_GetWord(STATUS_LABEL_LEVEL), PAL_GetWord(BATTLEWIN_LEVELUP_LABEL));
+            PAL_ShowDialogText(s);
+         }
+      }
+   }
+
+      for (i = 0; i <= gpGlobals->wMaxPartyMemberIndex; i++)
+      {
+         w = gpGlobals->rgParty[i].wPlayerRole;
+         j = 0;
+         {
+            while (j < gpGlobals->g.nLevelUpMagic)
+            {
+               if (gpGlobals->g.lprgLevelUpMagic[j].m[w].wMagic == 0 ||
+	               gpGlobals->g.lprgLevelUpMagic[j].m[w].wLevel > gpGlobals->g.PlayerRoles.rgwLevel[w])
+               {
+	               j++;
+	               continue;
+               }
+
+               if (PAL_AddMagic(w, gpGlobals->g.lprgLevelUpMagic[j].m[w].wMagic))
+               {
+	               PAL_StartDialog(kDialogCenterWindow, 0, 0, FALSE);
+	               PAL_swprintf(s, sizeof(s) / sizeof(WCHAR), L"%ls%ls%ls", PAL_GetWord(gpGlobals->g.PlayerRoles.rgwName[w]), PAL_GetWord(BATTLEWIN_ADDMAGIC_LABEL), PAL_GetWord(gpGlobals->g.lprgLevelUpMagic[j].m[w].wMagic));
+	               PAL_ShowDialogText(s);
+               }
+
+               j++;
+            }
+         }
+      }
+   break;
+   
+   case 0x00bb:
+      //
+      //为我方全体添加所有增益状态，驱散所有负面状态
+      //
+      for (i = 0; i <= gpGlobals->wMaxPartyMemberIndex; i++)
+      {
+         w = gpGlobals->rgParty[i].wPlayerRole;
+         PAL_CurePoisonByLevel(w, 10);
+         PAL_RemovePlayerStatus(w, 0);
+         PAL_RemovePlayerStatus(w, 1);
+         PAL_RemovePlayerStatus(w, 2);
+         PAL_RemovePlayerStatus(w, 3);
+         PAL_RemovePlayerStatus(w, 10);
+         PAL_RemovePlayerStatus(w, 11);
+         PAL_RemovePlayerStatus(w, 12);
+         PAL_RemovePlayerStatus(w, 13);
+         PAL_SetPlayerStatus(w, 5, 6);
+         PAL_SetPlayerStatus(w, 6, 6);
+         PAL_SetPlayerStatus(w, 7, 6);
+         PAL_SetPlayerStatus(w, 8, 6);
+         PAL_SetPlayerStatus(w, 9, 6);
+      }
+      break;
+
+   case 0x00bc:
+      //
+      //为我方全体添加身法加快
+      //
+      for (i = 0; i <= gpGlobals->wMaxPartyMemberIndex; i++)
+      {
+         w = gpGlobals->rgParty[i].wPlayerRole;
+         PAL_SetPlayerStatus(w, 7, 7);
+      }
+      break;
+
+   case 0x00bd:
+	   //
+	   //Percentage Increase/decrease player's HP and MP
+	   //
+	   if (pScript->rgwOperand[0])
+	   {
+		   //
+		   // Apply to everyone
+		   //
+		   g_fScriptSuccess = FALSE;
+		   for (i = 0; i <= gpGlobals->wMaxPartyMemberIndex; i++)
+		   {
+			   w = gpGlobals->rgParty[i].wPlayerRole;
+			   if (PAL_IncreaseHPMP(w, PAL_GetPlayerMaxHP(w) * (SHORT)pScript->rgwOperand[1] / 100, PAL_GetPlayerMaxMP(w) * (SHORT)pScript->rgwOperand[2] / 100))
+				   g_fScriptSuccess = TRUE;
+		   }
+	   }
+	   else
+	   {
+		   //
+		   // Apply to one player 
+		   //
+		   if (!PAL_IncreaseHPMP(wEventObjectID, PAL_GetPlayerMaxHP(wEventObjectID) * (SHORT)pScript->rgwOperand[1] / 100, PAL_GetPlayerMaxMP(wEventObjectID) * (SHORT)pScript->rgwOperand[2] / 100))
+		   {
+			   g_fScriptSuccess = FALSE;
+		   }
+	   }
+	   break;
+
+   case 0x00be:
+	   //
+	   // Walk the party to the specified position
+	   //
+	   PAL_PartyWalkTo(pScript->rgwOperand[0], pScript->rgwOperand[1], pScript->rgwOperand[2], 3);
+	   break;
 
    default:
       TerminateOnError("SCRIPT: Invalid Instruction at %4x: (%4x - %4x, %4x, %4x)",
@@ -3024,51 +3824,50 @@ PAL_InterpretInstruction(
 PAL_FORCE_INLINE
 INT
 MESSAGE_GetSpan(
-    INT wScriptEntry
+	INT wScriptEntry
 )
 /*++
  Purpose:
-
  Get the final span of a message block which started from message index of wScriptEntry
- 
+
  Parameters:
- 
+
  [IN]  wScriptEntry - The script entry which starts the message block, must be a 0xffff command.
- 
+
  Return value:
- 
+
  The final span of the message block.
- 
+
  --*/
 {
-    int tmp_wScriptEntry = wScriptEntry;
-    int offset=0;
+	int tmp_wScriptEntry = wScriptEntry;
+	int offset = 0;
 
-    // ensure the command leads a new message block
-    assert(wScriptEntry > 0 &&
-           gpGlobals->g.lprgScriptEntry[wScriptEntry-1].wOperation != 0xFFFF &&
-           gpGlobals->g.lprgScriptEntry[wScriptEntry-1].wOperation != 0x008E );
-    // ensure the command is 0xFFFF
-    assert(gpGlobals->g.lprgScriptEntry[wScriptEntry].wOperation == 0xFFFF);
+	// ensure the command leads a new message block
+	assert(wScriptEntry > 0 &&
+		gpGlobals->g.lprgScriptEntry[wScriptEntry - 1].wOperation != 0xFFFF &&
+		gpGlobals->g.lprgScriptEntry[wScriptEntry - 1].wOperation != 0x008E);
+	// ensure the command is 0xFFFF
+	assert(gpGlobals->g.lprgScriptEntry[wScriptEntry].wOperation == 0xFFFF);
 
-    //
-    // If the NEXT command is 0xFFFF, but the message index is not continuous or not incremental,
-    // this MESSAGE block shoud end at THIS command.
-    //
-    if( gpGlobals->g.lprgScriptEntry[tmp_wScriptEntry+1].wOperation == 0xFFFF && gpGlobals->g.lprgScriptEntry[tmp_wScriptEntry+1].rgwOperand[0] != gpGlobals->g.lprgScriptEntry[tmp_wScriptEntry].rgwOperand[0] + 1)
-        tmp_wScriptEntry++;
-    else
-        while (gpGlobals->g.lprgScriptEntry[tmp_wScriptEntry].wOperation == 0xFFFF
-               || gpGlobals->g.lprgScriptEntry[tmp_wScriptEntry].wOperation == 0x008E)
-        {
-            if(gpGlobals->g.lprgScriptEntry[tmp_wScriptEntry].wOperation == 0x008E)
-                offset++;
-            if(gpGlobals->g.lprgScriptEntry[tmp_wScriptEntry].wOperation == 0xFFFF)
-                offset=0;
-            tmp_wScriptEntry++;
-        }
+	//
+	// If the NEXT command is 0xFFFF, but the message index is not continuous or not incremental,
+	// this MESSAGE block shoud end at THIS command.
+	//
+	if (gpGlobals->g.lprgScriptEntry[tmp_wScriptEntry + 1].wOperation == 0xFFFF && gpGlobals->g.lprgScriptEntry[tmp_wScriptEntry + 1].rgwOperand[0] != gpGlobals->g.lprgScriptEntry[tmp_wScriptEntry].rgwOperand[0] + 1)
+		tmp_wScriptEntry++;
+	else
+		while (gpGlobals->g.lprgScriptEntry[tmp_wScriptEntry].wOperation == 0xFFFF
+			|| gpGlobals->g.lprgScriptEntry[tmp_wScriptEntry].wOperation == 0x008E)
+		{
+			if (gpGlobals->g.lprgScriptEntry[tmp_wScriptEntry].wOperation == 0x008E)
+				offset++;
+			if (gpGlobals->g.lprgScriptEntry[tmp_wScriptEntry].wOperation == 0xFFFF)
+				offset = 0;
+			tmp_wScriptEntry++;
+		}
 
-    return gpGlobals->g.lprgScriptEntry[tmp_wScriptEntry-offset-1].rgwOperand[0] - gpGlobals->g.lprgScriptEntry[wScriptEntry].rgwOperand[0];
+	return gpGlobals->g.lprgScriptEntry[tmp_wScriptEntry - offset - 1].rgwOperand[0] - gpGlobals->g.lprgScriptEntry[wScriptEntry].rgwOperand[0];
 }
 
 WORD
@@ -3124,7 +3923,7 @@ PAL_RunTriggerScript(
    //
    // Set the default dialog speed.
    //
-   PAL_DialogSetDelayTime(3);
+   PAL_DialogSetDelayTime(2);
 
    while (wScriptEntry != 0 && !fEnded)
    {
@@ -3356,7 +4155,9 @@ PAL_RunTriggerScript(
          // Show text in a window at the center of the screen
          //
          PAL_ClearDialog(TRUE);
-         PAL_StartDialog(kDialogCenterWindow, (BYTE)pScript->rgwOperand[0], 0, FALSE);
+	//	 g_TextLib.iDialogShadow = 5;
+		 PAL_StartDialogWithOffset(kDialogCenterWindow, 0, 0, FALSE, 0, -10);
+     //    PAL_StartDialog(kDialogCenterWindow, (BYTE)pScript->rgwOperand[0], 0, FALSE);
          wScriptEntry++;
          break;
 
@@ -3376,7 +4177,7 @@ PAL_RunTriggerScript(
          //
          if (gConfig.pszMsgFile)
          {
-            int msgSpan = MESSAGE_GetSpan(wScriptEntry);
+			int msgSpan = MESSAGE_GetSpan(wScriptEntry);
             int idx = 0, iMsg;
             while ((iMsg = PAL_GetMsgNum(pScript->rgwOperand[0], msgSpan, idx++)) >= 0)
 			{
@@ -3410,6 +4211,20 @@ PAL_RunTriggerScript(
             wScriptEntry++;
          }
          break;
+
+      //接下来是新增加的命令
+      case 0x00FF:
+      {
+          // 新命令：随机跳转到之后的n条后的地址中的一条，
+          // 执行这一条后，从这条命令开始处的n条后继续执行
+          // n为 pScript->rgwOperand[0]的值
+          WORD wNewScriptEntry = wScriptEntry + RandomLong(1, pScript->rgwOperand[0]);
+          WORD wJumpScriptEntry = PAL_InterpretInstruction(wNewScriptEntry, wEventObjectID);
+          
+          wScriptEntry += pScript->rgwOperand[0] + 1;
+          
+          break;
+      }
 
       default:
          PAL_ClearDialog(TRUE);
@@ -3555,7 +4370,7 @@ begin:
 
 		   if (gConfig.pszMsgFile)
 		   {
-               int msgSpan = MESSAGE_GetSpan(wScriptEntry);
+			   int msgSpan = MESSAGE_GetSpan(wScriptEntry);
 			   int idx = 0, iMsg;
 			   while ((iMsg = PAL_GetMsgNum(pScript->rgwOperand[0], msgSpan, idx++)) >= 0)
 			   {

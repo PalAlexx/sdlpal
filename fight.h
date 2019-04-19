@@ -112,11 +112,48 @@ PAL_BattleStealFromEnemy(
 
 VOID
 PAL_BattleSimulateMagic(
-   SHORT      sTarget,
-   WORD       wMagicObjectID,
-   WORD       wBaseDamage
+	SHORT		sTarget,
+	WORD		wMagicObjectID,
+	INT		wBaseDamage
 );
 
-PAL_C_LINKAGE_END
 
+INT PAL_New_GetAlivePlayerNum(VOID);
+BOOL PAL_New_IfEnemyCanMove(WORD wEnemyIndex);
+BOOL PAL_New_IfPlayerCanMove(WORD wPlayerRole);
+INT PAL_New_GetHealthyPlayerNum(VOID);
+INT PAL_New_GetAliveEnemyNum(VOID);
+
+INT
+PAL_GetPlayerActualDexterity(
+	WORD           wPlayerRole
+);
+
+INT
+PAL_GetPlayerActualAttackStrength(
+	WORD           wPlayerRole
+);
+
+INT
+PAL_GetPlayerActualMagicStrength(
+	WORD           wPlayerRole
+);
+
+INT
+PAL_GetPlayerActualDefense(
+	WORD           wPlayerRole
+); 
+
+INT
+PAL_GetPlayerActualFleeRate(
+	WORD           wPlayerRole
+);
+
+INT
+PAL_GetEnemyActualDexterity(
+	WORD			wEnemyIndex
+);
+
+
+PAL_C_LINKAGE_END
 #endif

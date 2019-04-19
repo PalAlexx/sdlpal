@@ -39,7 +39,7 @@ typedef DWORD           PAL_POS;
 #define PAL_XY_OFFSET(xy, x, y)    (PAL_POS)(((((INT)(y) << 16) & 0xFFFF0000) + ((xy) & 0xFFFF0000)) | (((INT)(x) & 0xFFFF) + ((xy) & 0xFFFF)))
 
 // maximum number of players in party
-#define     MAX_PLAYERS_IN_PARTY         3
+#define     MAX_PLAYERS_IN_PARTY         4
 
 // total number of possible player roles
 #define     MAX_PLAYER_ROLES             6
@@ -48,7 +48,7 @@ typedef DWORD           PAL_POS;
 #define     MAX_PLAYABLE_PLAYER_ROLES    5
 
 // maximum entries of inventory
-#define     MAX_INVENTORY                256
+#define     MAX_INVENTORY                999
 
 // maximum items in a store
 #define     MAX_STORE_ITEM               9
@@ -63,25 +63,25 @@ typedef DWORD           PAL_POS;
 #define     MAX_PLAYER_EQUIPMENTS        6
 
 // maximum number of magics for a player
-#define     MAX_PLAYER_MAGICS            32
+#define     MAX_PLAYER_MAGICS            64
 
 // maximum number of scenes
-#define     MAX_SCENES                   300
+#define     MAX_SCENES                   310
 
 // maximum number of objects
-#define     MAX_OBJECTS                  600
+#define     MAX_OBJECTS                  1000
 
 // maximum number of event objects (should be somewhat more than the original,
 // as there are some modified versions which has more)
-#define     MAX_EVENT_OBJECTS            5500
+#define     MAX_EVENT_OBJECTS            10000
 
 // maximum number of effective poisons to players
 #define     MAX_POISONS                  16
 
 // maximum number of level
-#define     MAX_LEVELS                   99
+#define     MAX_LEVELS                999
 
-#define     MINIMAL_WORD_COUNT           (MAX_OBJECTS + 13)
+#define     MINIMAL_WORD_COUNT           (MAX_OBJECTS + 30)
 
 typedef enum tagPALDIRECTION
 {

@@ -88,7 +88,11 @@ static const int g_KeyMap[][2] = {
    { SDLK_w,         kKeyThrowItem },
    { SDLK_q,         kKeyFlee },
    { SDLK_f,         kKeyForce },
-   { SDLK_s,         kKeyStatus }
+   { SDLK_s,         kKeyStatus },
+{ SDLK_2,         kKeyEnemyStatus },
+{ SDLK_1,          kKeyData },
+{ SDLK_3,          kKeyMagic },
+{ SDLK_t,           kKeyEquipment },
 };
 
 static VOID
@@ -1239,7 +1243,7 @@ PAL_RegisterInputFilter(
   Parameters:
 
     [IN] init_filter - Filter that will be called inside PAL_InitInput
-	[IN] event_filter - Filter that will be called inside PAL_PollEvent, 
+	[IN] event_filter - Filter that will be called inside PAL_PollEvent,
 	                    return non-zero value from this filter disables
 						further internal event processing.
 	[IN] shutdown_filter - Filter that will be called inside PAL_ShutdownInput

@@ -97,7 +97,9 @@ PAL_CalcCoverTiles(
    int             x, y, i, l, iTileHeight;
    LPCBITMAPRLE    lpTile;
 
-   const int       sx = PAL_X(gpGlobals->viewport) + PAL_X(lpSpriteToDraw->pos) - lpSpriteToDraw->iLayer/2;
+ //  const int       sx = PAL_X(gpGlobals->viewport) + PAL_X(lpSpriteToDraw->pos);
+ //  const int       sy = PAL_Y(gpGlobals->viewport) + PAL_Y(lpSpriteToDraw->pos);
+   const int       sx = PAL_X(gpGlobals->viewport) + PAL_X(lpSpriteToDraw->pos) - lpSpriteToDraw->iLayer / 2;
    const int       sy = PAL_Y(gpGlobals->viewport) + PAL_Y(lpSpriteToDraw->pos) - lpSpriteToDraw->iLayer;
    const int       sh = ((sx % 32) ? 1 : 0);
 
@@ -291,7 +293,7 @@ PAL_SceneDrawSprites(
       x = (SHORT)lpEvtObj->x - PAL_X(gpGlobals->viewport);
       x -= PAL_RLEGetWidth(lpFrame) / 2;
 
-      if (x >= 320 || x < -(int)PAL_RLEGetWidth(lpFrame))
+      if (x >= 640 || x < -(int)PAL_RLEGetWidth(lpFrame))
       {
          //
          // outside the screen; skip it
@@ -303,7 +305,7 @@ PAL_SceneDrawSprites(
       y += lpEvtObj->sLayer * 8 + 9;
 
       vy = y - PAL_RLEGetHeight(lpFrame) - lpEvtObj->sLayer * 8 + 2;
-      if (vy >= 200 || vy < -(int)PAL_RLEGetHeight(lpFrame))
+      if (vy >= 400 || vy < -(int)PAL_RLEGetHeight(lpFrame))
       {
          //
          // outside the screen; skip it
@@ -437,9 +439,9 @@ PAL_ApplyWave(
          // Do a shift on the current line with the calculated offset.
          //
          memcpy(buf, p, b);
-         //memmove(p, p + b, 320 - b);
+         memmove(p, p + b, 320 - b);
          memmove(p, &p[b], 320 - b);
-         //memcpy(p + 320 - b, buf, b);
+         memcpy(p + 320 - b, buf, b);
          memcpy(&p[320 - b], buf, b);
       }
 
@@ -491,6 +493,15 @@ PAL_MakeScene(
    //
    PAL_SceneDrawSprites();
 
+  if (gpGlobals->wChaseRange != 1)
+   {
+	   PAL_DrawNumber(gpGlobals->wChasespeedChangeCycles, 3, PAL_XY(300,0), kNumColorYellow, kNumAlignRight);
+   }
+
+   if (gpGlobals->wCollectValue != 0)
+   {
+	   PAL_DrawNumber(gpGlobals->wCollectValue, 8, PAL_XY(270, 190), kNumColorYellow, kNumAlignRight);
+   }
    //
    // Check if we need to fade in.
    //
@@ -499,6 +510,12 @@ PAL_MakeScene(
       VIDEO_UpdateScreen(NULL);
       PAL_FadeIn(gpGlobals->wNumPalette, gpGlobals->fNightPalette, 1);
       gpGlobals->fNeedToFadeIn = FALSE;
+   }
+
+   if (gpGlobals->fDoAutoSave == TRUE)
+   {
+	   PAL_AutoSaveGame();
+	   gpGlobals->fDoAutoSave = FALSE;
    }
 }
 
@@ -668,18 +685,36 @@ PAL_UpdatePartyGestures(
          gpGlobals->rgParty[i].x = gpGlobals->rgTrail[1].x - PAL_X(gpGlobals->viewport);
          gpGlobals->rgParty[i].y = gpGlobals->rgTrail[1].y - PAL_Y(gpGlobals->viewport);
 
-         if (i == 2)
-         {
-            gpGlobals->rgParty[i].x +=
-               (gpGlobals->rgTrail[1].wDirection == kDirEast || gpGlobals->rgTrail[1].wDirection == kDirWest) ? -16 : 16;
-            gpGlobals->rgParty[i].y += 8;
-         }
-         else
+         if (i == 1)
          {
             gpGlobals->rgParty[i].x +=
                ((gpGlobals->rgTrail[1].wDirection == kDirWest || gpGlobals->rgTrail[1].wDirection == kDirSouth) ? 16 : -16);
             gpGlobals->rgParty[i].y +=
                ((gpGlobals->rgTrail[1].wDirection == kDirWest || gpGlobals->rgTrail[1].wDirection == kDirNorth) ? 8 : -8);
+         }
+         else if (i == 2)
+         {
+            gpGlobals->rgParty[i].x +=
+               (gpGlobals->rgTrail[1].wDirection == kDirEast || gpGlobals->rgTrail[1].wDirection == kDirWest) ? -16 : 16;
+               gpGlobals->rgParty[i].y += 8;
+         }
+         else if (i == 3)
+         {
+            SHORT dx = 0, dy = 0;
+            if (gpGlobals->rgTrail[1].wDirection == kDirSouth || gpGlobals->rgTrail[1].wDirection == kDirWest) {
+               dx = -16;
+            }
+            else {
+               dx = 16;
+            }
+            if (gpGlobals->rgTrail[1].wDirection == kDirWest || gpGlobals->rgTrail[1].wDirection == kDirNorth) {
+               dy = -8;
+            }
+            else {
+               dy = 8;
+            }
+            gpGlobals->rgParty[i].x += dx;
+            gpGlobals->rgParty[i].y += dy;
          }
 
          //
@@ -775,6 +810,7 @@ PAL_UpdateParty(
    //
    // Has user pressed one of the arrow keys?
    //
+
    if (g_InputState.dir != kDirUnknown)
    {
       xOffset = ((g_InputState.dir == kDirWest || g_InputState.dir == kDirSouth) ? -16 : 16);

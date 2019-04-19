@@ -199,14 +199,14 @@ PAL_ItemSelectMenuUpdate(
          //
 		 if ((SHORT)gpGlobals->rgInventory[i].nAmount - (SHORT)gpGlobals->rgInventory[i].nAmountInUse > 1)
 		 {
-            PAL_DrawNumber(gpGlobals->rgInventory[i].nAmount - gpGlobals->rgInventory[i].nAmountInUse,
-               2, PAL_XY(15 + iAmountXOffset + k * iItemTextWidth, 17 + j * 18), kNumColorCyan, kNumAlignRight);
+            PAL_DrawNumber(gpGlobals->rgInventory[i].nAmount - gpGlobals->rgInventory[i].nAmountInUse, 
+               3, PAL_XY(11 + iAmountXOffset + k * iItemTextWidth, 17 + j * 18), kNumColorCyan, kNumAlignRight);
 		 }
 
          i++;
       }
    }
-
+    
    int xBase = 0, yBase = 140;
    //
    // Draw the picture of current selected item
@@ -260,7 +260,7 @@ PAL_ItemSelectMenuUpdate(
                   *next++ = '\0';
                }
 
-               PAL_DrawText(d, PAL_XY(75, k), DESCTEXT_COLOR, TRUE, FALSE, FALSE);
+               PAL_DrawText(d, PAL_XY(66, k), DESCTEXT_COLOR, TRUE, FALSE, FALSE);
                k += 16;
 
                if (next == NULL)
@@ -354,7 +354,6 @@ PAL_ItemSelectMenuInit(
    {
       g_iNumInventory++;
    }
-
    //
    // Also add usable equipped items to the list
    //
@@ -424,11 +423,21 @@ PAL_ItemSelectMenu(
 
    while (TRUE)
    {
-      if (lpfnMenuItemChanged == NULL)
+      if (lpfnMenuItemChanged == NULL && !gpGlobals->fInBattle)
       {
-         PAL_MakeScene();
+		  PAL_MakeScene();
       }
-
+	  else if (lpfnMenuItemChanged != NULL)
+	  {
+		  PAL_MakeScene();
+		  g_fNoDesc = TRUE;
+		  (*lpfnMenuItemChanged)(gpGlobals->rgInventory[gpGlobals->iCurInvMenuItem].wItem);
+	  }
+	  else 
+	  {
+		  PAL_BattleMakeScene();
+		  VIDEO_CopyEntireSurface(g_Battle.lpSceneBuf, gpScreen);
+	  }
       w = PAL_ItemSelectMenuUpdate();
       VIDEO_UpdateScreen(NULL);
 

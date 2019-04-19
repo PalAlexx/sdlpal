@@ -75,7 +75,9 @@ PAL_GameMain(
 --*/
 {
    DWORD       dwTime;
-
+#ifdef SHOW_DATA_IN_BATTLE
+   gpGlobals->fShowDataInBattle = FALSE;
+#endif
    //
    // Show the opening menu.
    //

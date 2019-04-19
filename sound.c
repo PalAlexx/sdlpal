@@ -951,19 +951,20 @@ SOUND_Init(
 
 --*/
 {
-	char *mkfs[2];
-	SoundLoader func[2];
+	char *mkfs[3];
+	SoundLoader func[3];
 	int i;
 
 	if (gConfig.fIsWIN95)
 	{
-		mkfs[0] = "sounds.mkf"; func[0] = SOUND_LoadWAVEData;
+		mkfs[0] = "newdata.mkf"; func[0] = SOUND_LoadWAVEData;
 		mkfs[1] = "voc.mkf"; func[1] = SOUND_LoadVOCData;
+
 	}
 	else
 	{
 		mkfs[0] = "voc.mkf"; func[0] = SOUND_LoadVOCData;
-		mkfs[1] = "sounds.mkf"; func[1] = SOUND_LoadWAVEData;
+		mkfs[1] = "newdata.mkf"; func[1] = SOUND_LoadWAVEData;
 	}
 
 	for (i = 0; i < 2; i++)

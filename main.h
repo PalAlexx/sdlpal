@@ -48,6 +48,7 @@
 #include "script.h"
 #include "battle.h"
 #include "fight.h"
+#include "enemy.h"
 #include "play.h"
 #include "game.h"
 #include "midi.h"

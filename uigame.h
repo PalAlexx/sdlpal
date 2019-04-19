@@ -40,7 +40,8 @@ PAL_OpeningMenu(
 
 INT
 PAL_SaveSlotMenu(
-   WORD        wDefaultSlot
+   WORD        wDefaultSlot,
+	BOOL      fIsSave
 );
 
 WORD
@@ -96,6 +97,17 @@ PAL_EquipItemMenu(
 VOID
 PAL_QuitGame(
    VOID
+);
+
+
+VOID
+PAL_New_Magic(
+	VOID
+);
+
+VOID
+PAL_BuyLingHu(
+	WORD           wStoreNum
 );
 
 PAL_C_LINKAGE_END

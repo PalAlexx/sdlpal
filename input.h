@@ -57,6 +57,10 @@ enum PALKEY
    kKeyForce       = (1 << 15),
    kKeyHome        = (1 << 16),
    kKeyEnd         = (1 << 17),
+   kKeyData = (1 << 18),
+   kKeyEnemyStatus = (1 << 19),
+   kKeyMagic = (1 << 20),
+   kKeyEquipment = (1 << 21),
 };
 
 PAL_C_LINKAGE_BEGIN

@@ -22,6 +22,8 @@
 
 #include "main.h"
 
+extern WORD GetSavedTimes(int iSaveSlot);
+
 VOID
 PAL_GameUpdate(
    BOOL       fTrigger
@@ -537,6 +539,7 @@ PAL_StartFrame(
       //
       // Show the use item menu
       //
+      PAL_New_SortInventory();
       PAL_GameUseItem();
    }
    else if (g_InputState.dwKeyPress & kKeyThrowItem)
@@ -544,6 +547,7 @@ PAL_StartFrame(
       //
       // Show the equipment menu
       //
+      PAL_New_SortInventory();
       PAL_GameEquipItem();
    }
    else if (g_InputState.dwKeyPress & kKeyForce)
@@ -560,6 +564,10 @@ PAL_StartFrame(
       //
       PAL_PlayerStatus();
    }
+   else	if (g_InputState.dwKeyPress & kKeyMagic)
+   {
+      PAL_New_Magic();
+   }
    else if (g_InputState.dwKeyPress & kKeySearch)
    {
       //
@@ -573,6 +581,26 @@ PAL_StartFrame(
       // Quit Game
       //
       PAL_QuitGame();
+   }
+   else if (g_InputState.dwKeyPress &  kKeyData)
+   {
+   //	int iSlot = PAL_SaveSlotMenu(gpGlobals->bCurrentSaveSlot);
+      WORD wSavedTimes = 0;
+      gpGlobals->bCurrentSaveSlot = 9;
+
+      WORD curSavedTimes = GetSavedTimes(9);
+      if (curSavedTimes >= wSavedTimes)
+      {
+         wSavedTimes = curSavedTimes;
+      }
+      PAL_SaveGame(gpGlobals->bCurrentSaveSlot, wSavedTimes + 1);
+      PAL_ClearKeyState();
+      AUDIO_PlaySound(127);
+      WCHAR s[256] = L"";
+      PAL_swprintf(s, sizeof(s) / sizeof(WCHAR), L"%ls", L"存储完毕");
+      PAL_StartDialog(kDialogCenterWindow, 0, 0, FALSE);
+      PAL_ShowDialogText(s);
+      PAL_ClearDialog(FALSE);
    }
 
    if (--gpGlobals->wChasespeedChangeCycles == 0)

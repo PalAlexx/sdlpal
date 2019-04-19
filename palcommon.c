@@ -651,7 +651,7 @@ PAL_SpriteGetFrame(
    //
    // Hack for broken sprites like the Bloody-Mouth Bug
    //
-//   imagecount = (lpSprite[0] | (lpSprite[1] << 8)) - 1;
+   imagecount = (lpSprite[0] | (lpSprite[1] << 8)) - 1;
    imagecount = (lpSprite[0] | (lpSprite[1] << 8));
 
    if (iFrameNum < 0 || iFrameNum >= imagecount)
@@ -884,7 +884,7 @@ PAL_MKFGetDecompressedSize(
    // Read the header.
    //
    fseek(fp, uiOffset, SEEK_SET);
-   if (gConfig.fIsWIN95)
+   if (!gConfig.fIsWIN95)
    {
       PAL_fread(buf, sizeof(DWORD), 1, fp);
       buf[0] = SDL_SwapLE32(buf[0]);

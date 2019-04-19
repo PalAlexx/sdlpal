@@ -24,8 +24,8 @@
 #define GAME_H
 
 #include "common.h"
-
-#define    FPS             10
+ 
+#define    FPS             12
 #define    FRAME_TIME      (1000 / FPS)
 
 PAL_C_LINKAGE

@@ -81,9 +81,13 @@ typedef enum tagBATTLEUIACTION
 
 #define BATTLEUI_MAX_SHOWNUM             16
 
+#define LABEL_NOTHING					638
+
+
+
 typedef struct tagSHOWNUM
 {
-   WORD             wNum;
+   INT             wNum;
    PAL_POS          pos;
    DWORD            dwTime;
    NUMCOLOR         color;
@@ -141,11 +145,24 @@ PAL_BattleUIUpdate(
 
 VOID
 PAL_BattleUIShowNum(
-   WORD           wNum,
+   INT           wNum,
    PAL_POS        pos,
    NUMCOLOR       color
 );
 
+#ifdef SHOW_DATA_IN_BATTLE
+VOID
+PAL_New_BattleUIShowData(
+	VOID
+);
+#endif
+
+#ifdef SHOW_ENEMY_STATUS
+VOID
+PAL_New_EnemyStatus(
+	VOID
+);
+#endif
 PAL_C_LINKAGE_END
 
 #endif
