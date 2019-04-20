@@ -3062,5 +3062,4 @@ VOID PAL_AutoSaveGame()
 		wSavedTimes = curSavedTimes;
 	}
 	PAL_SaveGame(gpGlobals->bCurrentSaveSlot, wSavedTimes + 1);
-	AUDIO_PlaySound(127);
 }

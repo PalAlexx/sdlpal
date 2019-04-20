@@ -31,10 +31,10 @@
 #define _CRT_SECURE_NO_WARNINGS
 #endif
 
-#define SHOW_MP_DECREASING							//当mp减少时也显示数值
-#define STRENGTHEN_ENEMY   //增强敌人，在后期加强前期的敌人，队伍人数在4人，敌人增强
-#define SHOW_DATA_IN_BATTLE  //战斗中显示数据
-#define SHOW_ENEMY_STATUS   //战斗中显示敌人状态
+#define SHOW_MP_DECREASING	
+#define STRENGTHEN_ENEMY   
+#define SHOW_DATA_IN_BATTLE  
+#define SHOW_ENEMY_STATUS   
 #define ADD_POISON_FAIL_THEN_JUMP                    
 #define ADD_SOME_POISONS_SUCCESSFULLY_ANYTIME		
 #define ADD_SOME_STATUSES_SUCCESSFULLY_ANYTIME		
@@ -47,7 +47,7 @@
 //增加新指令 百分比恢复体力、真气
 //敌人可以被咒封
 //显示人物升级学会法术
-//快速存档
+//快速存档、自动存档
 typedef enum tagPlayerRoleID
 {
 	RoleID_LiXiaoYao = 0,
