@@ -287,10 +287,12 @@ PAL_BattleUIIsActionValid(
 
 --*/
 {
-   WORD     wPlayerRole, w;
+   WORD     wPlayerRole, w, wObject, wMagicNum;
    int      i;
 
    wPlayerRole = gpGlobals->rgParty[g_Battle.UI.wCurPlayerIndex].wPlayerRole;
+   wObject = PAL_GetPlayerCooperativeMagic(wPlayerRole);
+   wMagicNum = gpGlobals->g.rgObject[wObject].magic.wMagicNumber;
 
    switch (ActionType)
    {
@@ -331,7 +333,8 @@ PAL_BattleUIIsActionValid(
          for (i = 0; i <= gpGlobals->wMaxPartyMemberIndex; i++)
             if (PAL_IsPlayerHealthy(gpGlobals->rgParty[i].wPlayerRole))
                healthyNumber++;
-         return PAL_IsPlayerHealthy(wPlayerRole) && healthyNumber > 1;
+         return PAL_IsPlayerHealthy(wPlayerRole) && 
+             healthyNumber > 1 && gpGlobals->g.PlayerRoles.rgwHP[wPlayerRole] >= gpGlobals->g.lprgMagic[wMagicNum].wCostMP;
       }
 #endif
       break;

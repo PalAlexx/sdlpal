@@ -3368,7 +3368,8 @@ PAL_BattlePlayerValidateAction(
          {
             w = gpGlobals->rgParty[i].wPlayerRole;
             g_Battle.coopContributors[i] = PAL_IsPlayerHealthy(w);
-            if( g_Battle.coopContributors[i] )
+            if( g_Battle.coopContributors[i] && 
+                gpGlobals->g.PlayerRoles.rgwHP[w] >= gpGlobals->g.lprgMagic[gpGlobals->g.rgObject[wObjectID].magic.wMagicNumber].wCostMP)
                iTotalHealthy ++;
          }
          if( iTotalHealthy <= 1 )
@@ -3859,6 +3860,7 @@ PAL_BattlePlayerPerformAction(
 #endif
       wObject = PAL_GetPlayerCooperativeMagic(gpGlobals->rgParty[wPlayerIndex].wPlayerRole);
       wMagicNum = gpGlobals->g.rgObject[wObject].magic.wMagicNumber;
+      WORD wCostMP = gpGlobals->g.lprgMagic[wMagicNum].wCostMP;
 
       sTarget = FIGHT_DetectMagicTargetChange(wMagicNum, sTarget);
 
@@ -3958,8 +3960,10 @@ PAL_BattlePlayerPerformAction(
             continue;
 #endif
 
-         gpGlobals->g.PlayerRoles.rgwHP[gpGlobals->rgParty[i].wPlayerRole] -=
-            gpGlobals->g.lprgMagic[wMagicNum].wCostMP;
+         if ( gpGlobals->g.PlayerRoles.rgwHP[gpGlobals->rgParty[i].wPlayerRole] >= wCostMP)
+         {
+             gpGlobals->g.PlayerRoles.rgwHP[gpGlobals->rgParty[i].wPlayerRole] -= wCostMP;
+         }
 
          if ((SHORT)(gpGlobals->g.PlayerRoles.rgwHP[gpGlobals->rgParty[i].wPlayerRole]) <= 0)
          {
